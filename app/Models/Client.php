@@ -24,7 +24,7 @@ class Client extends Model
         'datecreat'
     ];
 
-      /**
+    /**
      * The attributes that should be hidden for serialization.
      *
      * @var array<int, string>

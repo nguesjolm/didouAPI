@@ -120,8 +120,8 @@ use App\Cinetpay\Cinetpay;
                         $data  [] = [
                           'id'             => $comd->idcommandes,
                           'numComd'        => $comd->numComd,
-                          'livreurs'        => $comd->livreurs,
-                          'statut_livreurs' => $comd->statut_livreurs,
+                          'livreur'        => $comd->livreur,
+                          'statut_livreur' => $comd->statut_livreur,
                           'statut_client'  => $comd->statut_client,
                           'ambassadeur'    => $comd->ambassadeur,
                           'code_gps'       => $comd->code_gps,
@@ -973,27 +973,7 @@ use App\Cinetpay\Cinetpay;
               {
                   $clientdata = DB::table('clients')->where('iduser','=',$userid)->first();
                   return $clientdata;
-                  // if ($clientdata) {
-                  //   $data[] = [
-                  //     'status'        => $clientdata->status,
-                  //     'parain'        => $clientdata->parain,
-                  //     'iduser'        => $clientdata->iduser
-                  //   ];
-                  //   return response()->json(['statusCode'=>'200',
-                  //                             'status'=>'true',
-                  //                             'message'=>'Afficher un compte client',
-                  //                             'data'=> $data,
-                  //                             'error'=> '',
-                  //                         ]);
-                  // } else {
-                  //   return response()->json(['statusCode'=>'404',
-                  //                             'status'=>'false',
-                  //                             'message'=>'aucun compte client trouvé',
-                  //                             'data'=> '',
-                  //                             'error'=> '',
-                  //                           ]);
-                  // }
-                 
+                
               }
 
 
@@ -1041,11 +1021,11 @@ use App\Cinetpay\Cinetpay;
               }
             
             /*---------------------
-              GESTION DES livreursS
+              GESTION DES LIVREURS
             ----------------------*/
             
-              //Create livreurs
-              function createlivreurs($nom,$tel,$email,$local)
+              //Create livreur
+              function createLivreur($nom,$tel,$email,$local)
               {
                 $data = ['nom'=>$nom,
                          'tel'=>$tel,
@@ -1061,7 +1041,7 @@ use App\Cinetpay\Cinetpay;
                    DB::table('livreurs')->insert($data);
                    return response()->json(['statusCode'=>'200',
                                             'status'=>'true',
-                                            'message'=>'livreurs ajouté avec succès',
+                                            'message'=>'livreur ajouté avec succès',
                                             'data'=> '',
                                             'error'=> '',
                                            ]);
@@ -1070,7 +1050,7 @@ use App\Cinetpay\Cinetpay;
                 {
                   return response()->json(['statusCode'=>'422',
                                            'status'=>'false',
-                                           'message'=>'Ce livreurs existe déjà',
+                                           'message'=>'Ce livreur existe déjà',
                                            'data'=> '',
                                            'error'=> '',
                                           ]);
@@ -1078,31 +1058,31 @@ use App\Cinetpay\Cinetpay;
               
               }
 
-              //Get all livreurss
-              function getAlllivreurs()
+              //Get all livreurs
+              function getAllLivreur()
               {
-                  $livreursall = DB::table('livreurs')->get();
-                  $nb = count($livreursall);
+                  $livreurall = DB::table('livreurs')->get();
+                  $nb = count($livreurall);
                   if ($nb!=0)
                   {
                      $data  = [];
-                     foreach ($livreursall as $livreurs) 
+                     foreach ($livreurall as $livreur) 
                      {
                         $data  [] = [
-                          'id'     => $livreurs->idlivreurs,
-                          'nom'    => $livreurs->nom,
-                          'email'  => $livreurs->email,
-                          'tel'    => $livreurs->tel,
-                          'status' => $livreurs->status,
-                          'local'  => $livreurs->local,
-                          'solde'  => $livreurs->solde,
-                          'photo'  => $livreurs->photo
+                          'id'     => $livreur->idlivreur,
+                          'nom'    => $livreur->nom,
+                          'email'  => $livreur->email,
+                          'tel'    => $livreur->tel,
+                          'status' => $livreur->status,
+                          'local'  => $livreur->local,
+                          'solde'  => $livreur->solde,
+                          'photo'  => $livreur->photo
                         ];
                      }
                      
                      return response()->json(['statusCode'=>'200',
                                               'status'=>'true',
-                                              'message'=>'Liste des livreurss',
+                                              'message'=>'Liste des livreurs',
                                               'data'=> $data,
                                               'error'=> '',
                                             ]);
@@ -1112,7 +1092,7 @@ use App\Cinetpay\Cinetpay;
                   {
                       return response()->json(['statusCode'=>'404',
                                               'status'=>'false',
-                                              'message'=>'Aucun livreurs trouvé',
+                                              'message'=>'Aucun livreur trouvé',
                                               'data'=> '',
                                               'error'=> '',
                                             ]);
@@ -1120,21 +1100,21 @@ use App\Cinetpay\Cinetpay;
                   
               }
 
-              //Get single livreurss
-              function getSinglelivreurs($livreurs)
+              //Get single livreurs
+              function getSingleLivreur($livreur)
               {
-                  $livreursdata = DB::table('livreurs')->where('idlivreurs','=',$livreurs)->first();
-                  if ($livreursdata)
+                  $livreurdata = DB::table('livreurs')->where('id_user','=',$livreur)->first();
+                  if ($livreurdata)
                   {
                     $data[] = [
-                      'id'     => $livreursdata->idlivreurs,
-                      'id_user' => $livreursdata->id_user,
-                      'local'  => $livreursdata->local,
-                      'solde'  => $livreursdata->solde
+                      'id'     => $livreurdata->idlivreur,
+                      'id_user' => $livreurdata->id_user,
+                      'local'  => getZone_id($livreurdata->local),
+                      'solde'  => $livreurdata->solde
                     ];
                     return response()->json(['statusCode'=>'200',
                                               'status'=>'true',
-                                              'message'=>'Afficher un livreurs',
+                                              'message'=>'Afficher un livreur',
                                               'data'=> $data,
                                               'error'=> '',
                                           ]);
@@ -1143,7 +1123,7 @@ use App\Cinetpay\Cinetpay;
                   {
                     return response()->json(['statusCode'=>'404',
                                               'status'=>'false',
-                                              'message'=>'aucun livreurs trouvé',
+                                              'message'=>'aucun livreur trouvé',
                                               'data'=> '',
                                               'error'=> '',
                                           ]);
@@ -1151,8 +1131,16 @@ use App\Cinetpay\Cinetpay;
                  
               }
 
-              //Update livreurs
-              function  updatlivreurs($nom,$tel,$email,$local,$status,$photo,$id)
+              //Get livreur id
+              function getLivreurID($userid)
+              {
+                $livreurdata = DB::table('livreurs')->where('id_user','=',$userid)->first();
+                return $livreurdata;
+              }
+
+
+              //Update livreur
+              function  updatlivreur($nom,$tel,$email,$local,$status,$photo,$id)
               {
                   $data = ['nom'=>$nom,
                            'tel'=>$tel,
@@ -1162,32 +1150,32 @@ use App\Cinetpay\Cinetpay;
                            'photo'=>$photo
                           ];
                   if ($nom!='') {
-                    DB::table('livreurs')->where('idlivreurs','=',$id)
+                    DB::table('livreurs')->where('idlivreur','=',$id)
                                         ->update(['nom'=>$nom,]);
                   }
 
                   if ($tel!='') {
-                    DB::table('livreurs')->where('idlivreurs','=',$id)
+                    DB::table('livreurs')->where('idlivreur','=',$id)
                                         ->update(['tel'=>$tel,]);
                   }
 
                   if ($email!='') {
-                    DB::table('livreurs')->where('idlivreurs','=',$id)
+                    DB::table('livreurs')->where('idlivreur','=',$id)
                                         ->update(['email'=>$email,]);
                   }
 
                   if ($local!='') {
-                    DB::table('livreurs')->where('idlivreurs','=',$id)
+                    DB::table('livreurs')->where('idlivreur','=',$id)
                                         ->update(['local'=>$local,]);
                   }
 
                   if ($status!='') {
-                    DB::table('livreurs')->where('idlivreurs','=',$id)
+                    DB::table('livreurs')->where('idlivreur','=',$id)
                                         ->update(['status'=>$status,]);
                   }
 
                   if ($photo!='') {
-                    DB::table('livreurs')->where('idlivreurs','=',$id)
+                    DB::table('livreurs')->where('idlivreur','=',$id)
                                         ->update(['photo'=>$photo]);
                   }
                  
@@ -1200,22 +1188,22 @@ use App\Cinetpay\Cinetpay;
                                           ]);
               }
 
-              //Delete livreurs
-              function deletelivreurs($livreurs)
+              //Delete livreur
+              function deleteLivreur($livreur)
               {
-                  DB::table('livreurs')->where('idlivreurs','=',$livreurs)->delete();
+                  DB::table('livreurs')->where('idlivreur','=',$livreur)->delete();
                   return response()->json(['statusCode'=>'200',
                                             'status'=>'true',
-                                            'message'=>"livreurs supprimé avec succès",
+                                            'message'=>"Livreur supprimé avec succès",
                                             'data'=> '',
                                             'error'=> '',
                                           ]);
               }
 
               //Enregistrer une livraison
-              function livreursLivraison($orderid,$livreurs)
+              function livreurLivraison($orderid,$livreur)
               {
-                  $data = ['livreurs'=>$livreurs];
+                  $data = ['livreur'=>$livreur];
                   DB::table('commandes')->where('idcommandes','=',$orderid)
                                                ->update($data);
                   return response()->json(['statusCode'=>'200',
@@ -1226,16 +1214,16 @@ use App\Cinetpay\Cinetpay;
                                         ]);
               }
 
-              //Livraison des livreurss
-              function orderOflivreurs($livreurs)
+              //Livraison des livreurs
+              function orderOfLivreur($livreur)
               {
-                 $livraisondata = DB::table('commandes')->where('livreurs','=',$livreurs)->get();
+                 $livraisondata = DB::table('commandes')->where('livreur','=',$livreur)->get();
                  $nb = count($livraisondata);
                  if ($nb!=0) 
                  {
                     return response()->json(['statusCode'=>'200',
                                               'status'=>'true',
-                                              'message'=>'recupérer les commande du livreurs',
+                                              'message'=>'recupérer les commande du livreur',
                                               'data'=> $livraisondata,
                                               'error'=> '',
                                             ]);
@@ -1251,18 +1239,18 @@ use App\Cinetpay\Cinetpay;
                  }
               }
 
-              //Liste des commandes en fonction du staut_livreurs
-              function orderlivreursStat($livreursid,$status)
+              //Liste des commandes en fonction du staut_livreur
+              function orderLivreurStat($livreurid,$status)
               {
-                  $orderdata = DB::table('commandes')->where('livreurs','=',$livreursid)
-                                                     ->where('statut_livreurs','=',$status)
+                  $orderdata = DB::table('commandes')->where('livreur','=',$livreurid)
+                                                     ->where('statut_livreur','=',$status)
                                                      ->get();
                   $nb = count($orderdata);
                   if ($nb!=0) 
                   {
                     return response()->json(['statusCode'=>'200',
                                               'status'=>'true',
-                                              'message'=>'commandes du livreurs en fonction du statut_livreurs',
+                                              'message'=>'commandes du livreur en fonction du statut_livreur',
                                               'data'=> $orderdata,
                                               'error'=> '',
                                             ]);
@@ -1278,25 +1266,25 @@ use App\Cinetpay\Cinetpay;
                   }
               }
 
-              //Créditer le solde d'un livreurs
-              function crediterSoldeLiv($livreursid)
+              //Créditer le solde d'un livreur
+              function crediterSoldeLiv($livreurid)
               {
-                 $livreursdata = DB::table('livreurs')->where('idlivreurs','=',$livreursid)->first();
+                 $livreurdata = DB::table('livreurs')->where('idlivreur','=',$livreurid)->first();
 
-                 $solde = $livreursdata->solde+setting()->gainlivreurs;
+                 $solde = $livreurdata->solde+setting()->gainlivreur;
                  $data = ['solde'=>$solde];
-                 DB::table('livreurs')->where('idlivreurs','=',$livreursid)
+                 DB::table('livreurs')->where('idlivreur','=',$livreurid)
                                      ->update($data);
                  #save transaction
-                 DB::table('livreurs_pay')->insert(['montant'=>setting()->gainlivreurs,
+                 DB::table('livreur_pay')->insert(['montant'=>setting()->gainlivreur,
                                                    'date'=>date('j F Y, H:i'),
-                                                   'livreurs_idlivreurs'=>$livreursid,
+                                                   'livreur_idlivreur'=>$livreurid,
                                                    "type"=>"dépôt",
                                                   ]);
 
                  return response()->json(['statusCode'=>'200',
                                           'status'=>'true',
-                                          'message'=>"Votre solde a été crédit de ".setting()->gainlivreurs." fcfa, vous avez ".$solde." Fcfa sur votre solde",
+                                          'message'=>"Votre solde a été crédit de ".setting()->gainlivreur." fcfa, vous avez ".$solde." Fcfa sur votre solde",
                                           'data'=> $data,
                                           'error'=> '',
                                         ]);
@@ -1362,8 +1350,8 @@ use App\Cinetpay\Cinetpay;
                         $data  [] = [
                           'id'             => $comd->idcommandes,
                           'numComd'        => $comd->numComd,
-                          'livreurs'        => $comd->livreurs,
-                          'statut_livreurs' => $comd->statut_livreurs,
+                          'livreur'        => $comd->livreur,
+                          'statut_livreur' => $comd->statut_livreur,
                           'statut_client'  => $comd->statut_client,
                           'ambassadeur'    => $comd->ambassadeur,
                           'code_gps'       => $comd->code_gps,
@@ -1402,8 +1390,8 @@ use App\Cinetpay\Cinetpay;
                     $data  [] = [
                       'id'             => $orderdata->idcommandes,
                       'numComd'        => $orderdata->numComd,
-                      'livreurs'        => $orderdata->livreurs,
-                      'statut_livreurs' => $orderdata->statut_livreurs,
+                      'livreur'        => $orderdata->livreur,
+                      'statut_livreur' => $orderdata->statut_livreur,
                       'statut_client'  => $orderdata->statut_client,
                       'ambassadeur_code'    => $orderdata->ambassadeur_code,
                       'code_gps'       => $orderdata->code_gps,
@@ -1517,15 +1505,15 @@ use App\Cinetpay\Cinetpay;
                  }
               }
 
-              //Mise à jour du statu de la commande :: statut_livreurs
-              function UpdOrderstatuslivreurs($orderid,$statutlivreurs)
+              //Mise à jour du statu de la commande :: statut_livreur
+              function UpdOrderstatusLivreur($orderid,$statutlivreur)
               {
-                 $data = ['statut_livreurs'=>$statutlivreurs];
+                 $data = ['statut_livreur'=>$statutlivreur];
                  DB::table('commandes')->where('idcommandes','=',$orderid)
                                        ->update($data);
                  return response()->json(['statusCode'=>'200',
                                           'status'=>'true',
-                                          'message'=>"Statut_livreurs mise à jour avec succès",
+                                          'message'=>"Statut_livreur mise à jour avec succès",
                                           'data'=> '',
                                           'error'=> '',
                                        ]);
@@ -1931,7 +1919,7 @@ use App\Cinetpay\Cinetpay;
                  {
                     return response()->json(['statusCode'=>'200',
                                             'status'=>'true',
-                                            'message'=>'recupérer les commande du livreurs',
+                                            'message'=>'recupérer les commande du livreur',
                                             'data'=> $orderdata,
                                             'error'=> '',
                                           ]);
@@ -2316,6 +2304,13 @@ use App\Cinetpay\Cinetpay;
                 
               }
 
+              //Get zone by id
+              function getZone_id($zone_id)
+              {
+                $zone = DB::table('zone')->where('idzone','=',$zone_id)->first();
+                return $zone;
+              }
+
 
             
             /**
@@ -2335,17 +2330,17 @@ use App\Cinetpay\Cinetpay;
                                         ]);
                 }
                 //paramétrer didou
-                function settingDidou($gainlivreurs,$gainambassadeur,$promoComd,$creditDidou)
+                function settingDidou($gainlivreur,$gainambassadeur,$promoComd,$creditDidou)
                 {
-                    $data = ['gainlivreurs'     =>$gainlivreurs,
+                    $data = ['gainlivreur'     =>$gainlivreur,
                              'gainambassadeur' =>$gainambassadeur, 
                              'promoComd'       =>$promoComd,
                              'creditDidou'     =>$creditDidou
                             ];
-                    if ($gainlivreurs!='') 
+                    if ($gainlivreur!='') 
                     {
                       DB::table('settings')->where('idsettings','=',1)
-                                           ->update(['gainlivreurs'=>$gainlivreurs]);
+                                           ->update(['gainlivreur'=>$gainlivreur]);
                     }
                     if ($gainambassadeur!='') 
                     {
@@ -2482,7 +2477,7 @@ use App\Cinetpay\Cinetpay;
           if ($statut_client=="pending")
           {
             DB::table('commandes')->where('idcommandes','=',$idcommandes)
-                                  ->update(['statut_client'=>$statut_client,'statut_livreurs'=>$statut_client]);
+                                  ->update(['statut_client'=>$statut_client,'statut_livreur'=>$statut_client]);
             $commande = DB::table('commandes')->where('idcommandes','=',$idcommandes)->first();
             $message = "Commande en cours de livraison";
 
@@ -2660,74 +2655,74 @@ use App\Cinetpay\Cinetpay;
 /**
  *  ----------------------------
  *  SYSTEME DE GESTION DE API
- *          API livreurs
+ *          API LIVREUR
  *  ----------------------------
  */
     
     /**
      * -----------------
-     * COMMANDE livreurs
+     * COMMANDE LIVREUR
      * -----------------
      */
-       //Get all livreurs commandes
-       function get_livreurs_comd_all($livreurs_id)
+       //Get all livreur commandes
+       function get_livreur_comd_all($livreur_id)
        {
-         $comd_All = DB::table('commandes')->where('livreurs','=',$livreurs_id)->orderBy('idcommandes','desc')->get();
+         $comd_All = DB::table('commandes')->where('livreur','=',$livreur_id)->orderBy('idcommandes','desc')->get();
          $nb = count($comd_All);
          if ($nb!=0) {
             return response()->json(['statusCode'=>'200',
                                       'status'=>'true',
-                                      'message'=> 'commandes du livreurs',
+                                      'message'=> 'commandes du livreur',
                                       'data'=> $comd_All,
                                       'error'=> '',
                                     ]);
          }else{
             return response()->json(['statusCode'=>401,
                                      'status' => false,
-                                     'message' =>  "Aucune commande trouvée pour ce livreurs",
+                                     'message' =>  "Aucune commande trouvée pour ce livreur",
                                      'error' => ''
                                     ], 401);
          }
          
        }
 
-       //Get livreurs commande by status
-       function get_livreurs_comd_status($livreurs_id,$commande_status)
+       //Get livreur commande by status
+       function get_livreur_comd_status($livreur_id,$commande_status)
        {
-          $comd_All = DB::table('commandes')->where('livreurs','=',$livreurs_id)->where('statut_livreurs','=',$commande_status)->get();
+          $comd_All = DB::table('commandes')->where('livreur','=',$livreur_id)->where('statut_livreur','=',$commande_status)->get();
           $nb = count($comd_All);
           if ($nb!=0) {
               return response()->json(['statusCode'=>'200',
                                        'status'=>'true',
-                                       'message'=> 'commandes du livreurs',
+                                       'message'=> 'commandes du livreur',
                                        'data'=> $comd_All,
                                        'error'=> '',
                                       ]);
           }else{
            return response()->json(['statusCode'=>401,
                                     'status' => false,
-                                    'message' =>  "Aucune commande trouvée pour ce livreurs",
+                                    'message' =>  "Aucune commande trouvée pour ce livreur",
                                     'error' => ''
                                    ], 401);
           }
        }
 
-       //Get livreurs commande by today
-       function get_livreurs_today_command($livreurs_id,$today_date)
+       //Get livreur commande by today
+       function get_livreur_today_command($livreur_id,$today_date)
        {
-        $comd_All = DB::table('commandes')->where('livreurs','=',$livreurs_id)->where('dateComd','=',$today_date)->get();
+        $comd_All = DB::table('commandes')->where('livreur','=',$livreur_id)->where('dateComd','=',$today_date)->get();
         $nb = count($comd_All);
         if ($nb!=0) {
             return response()->json(['statusCode'=>'200',
                                      'status'=>'true',
-                                     'message'=> 'commandes du livreurs',
+                                     'message'=> 'commandes du livreur',
                                      'data'=> $comd_All,
                                      'error'=> '',
                                     ]);
         }else{
          return response()->json(['statusCode'=>401,
                                   'status' => false,
-                                  'message' =>  "Aucune commande trouvée pour ce livreurs",
+                                  'message' =>  "Aucune commande trouvée pour ce livreur",
                                   'error' => ''
                                  ], 401);
         }
@@ -2735,30 +2730,30 @@ use App\Cinetpay\Cinetpay;
       
     /**
      * ------------------
-     *   SOLDE livreurs
+     *   SOLDE LIVREUR
      * ------------------
      */
        //Debiter le solde
-        function debiter_solde_livreurs($livreursid,$montant)
+        function debiter_solde_livreur($livreurid,$montant)
         {
-            $livreursdata = DB::table('livreurs')->where('idlivreurs','=',$livreursid)->first();
-            if ($livreursdata=="") {
+            $livreurdata = DB::table('livreurs')->where('idlivreur','=',$livreurid)->first();
+            if ($livreurdata=="") {
               return response()->json(['statusCode'=>'401',
                                          'status'=>'false',
-                                         'message'=>"Ce livreurs n'existe pas",
-                                         'data'=> $livreursdata,
+                                         'message'=>"Ce livreur n'existe pas",
+                                         'data'=> $livreurdata,
                                          'error'=> "",
                                         ]);
             }
-            if($livreursdata->solde > $montant){
-             $solde = $livreursdata->solde-$montant;
+            if($livreurdata->solde > $montant){
+             $solde = $livreurdata->solde-$montant;
              $data = ['solde'=>$solde];
-             DB::table('livreurs')->where('idlivreurs','=',$livreursid)
+             DB::table('livreurs')->where('idlivreur','=',$livreurid)
                                  ->update($data);
              #save transaction
-             DB::table('livreurs_pay')->insert(['montant'=>$montant,
+             DB::table('livreur_pay')->insert(['montant'=>$montant,
                                                'date'=>date('j F Y, H:i'),
-                                               'livreurs_idlivreurs'=>$livreursid,
+                                               'livreur_idlivreur'=>$livreurid,
                                                "type"=>"retrait",
                                               ]);
 
@@ -2766,36 +2761,36 @@ use App\Cinetpay\Cinetpay;
              return response()->json(['statusCode'=>'200',
                                      'status'=>'true',
                                      'message'=>"Votre solde a été débité de ".$montant." fcfa il vous reste ".$solde." Fcfa",
-                                     'data'=> $livreursdata,
+                                     'data'=> $livreurdata,
                                      'error'=> '',
                                    ]);
             }else{
               return response()->json(['statusCode'=>'401',
                                         'status'=>false,
                                         'message'=>"Votre solde est insuffisant",
-                                        'data'=> $livreursdata,
+                                        'data'=> $livreurdata,
                                         'error'=> '',
                                       ]);
             }
           
         }
        //Get all transaction
-       function get_livreurs_all_transactions($id_livreurs)
+       function get_livreur_all_transactions($id_livreur)
        {
-          $livreursdata = DB::table('livreurs_pay')->where('livreurs_idlivreurs','=',$id_livreurs)->orderBy('idlivreurs_pay','desc')->get();
-          $nb = count($livreursdata);
+          $livreurdata = DB::table('livreur_pay')->where('livreur_idlivreur','=',$id_livreur)->orderBy('idlivreur_pay','desc')->get();
+          $nb = count($livreurdata);
           if ($nb==0) {
             return response()->json(['statusCode'=>'401',
                                        'status'=>'false',
-                                       'message'=>"Ce livreurs n'existe pas",
-                                       'data'=> $livreursdata,
+                                       'message'=>"Ce livreur n'existe pas",
+                                       'data'=> $livreurdata,
                                        'error'=> "",
                                       ]);
           }else{
             return response()->json(['statusCode'=>'200',
                                      'status'=>'true',
                                      'message'=>"Historique des transactions",
-                                     'data'=> $livreursdata,
+                                     'data'=> $livreurdata,
                                      'error'=> '',
                                    ]);
           }

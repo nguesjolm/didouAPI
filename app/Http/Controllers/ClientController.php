@@ -30,7 +30,7 @@ class ClientController extends Controller
                 //validated
                 $validateClient = Validator::make($request->all(),[
                     'nom' => 'required|min:4',
-                    'email' => 'email|unique:clients',
+                    'email' => 'email|unique:users',
                     'tel' => 'required|min:10|max:10|unique:users',
                     'password' => 'required|min:8',
                 ]);
@@ -52,9 +52,9 @@ class ClientController extends Controller
                 ]);
 
                 $client = Client::create(['status'        => 1,
-                                          'ambassadeur'        => $request->parain,
+                                          'ambassadeur'   => $request->parain,
                                           'iduser'        => $user->id,
-                                          'date_creation' => $request->date_creation
+                                          'date_creation' => date('d/m/Y')
                                         ]);
                 
                 return response()->json([
@@ -135,7 +135,6 @@ class ClientController extends Controller
                     Sendsms($msg,"225".$tel,"DIDOU");
                     return response()->json(['statusCode' => 200,
                                              'status'     => true,
-                                             'data_user'  => $user,
                                              'message'    => $msg,
                                             ], 200); 
                 }else {
@@ -146,7 +145,6 @@ class ClientController extends Controller
                     ], 401);
                 }
             } catch (\Throwable $th) {
-                //throw $th;
                 //throw $th;
                 return response()->json([
                     'statusCode'=>500,
@@ -206,11 +204,11 @@ class ClientController extends Controller
         //Resset password
         function newpassword(Request $request)
         {
+
             try {
                 //validated
                 $validateUser = Validator::make($request->all(),
                 [
-                    'iduser'   => 'required',
                     'password' => 'required|min:8',
                 ]);
 
@@ -226,14 +224,15 @@ class ClientController extends Controller
 
                 if ($request->password!='') 
                 {
-                    User::where('id', $request->iduser)
+                    
+                    User::where('id', Auth::id())
                          ->update(['password' => $request->password]);
                     
                     return response()->json(['statusCode'=>200,
                                              'status' => true,
                                              'message' => "Mise à jour effectuée avec succès, veuillez vous connectez avec votre nouveau mot de passe",
                                             ], 200);
-    
+
                 }
                 
              
@@ -308,7 +307,9 @@ class ClientController extends Controller
        function getAllcreditUser(Request $request)
        {
           try {
-            return getAllUSerCredit($request->clientid);
+            $user = Auth::user();
+            $client = getSingleClientsUser($user->id);
+            return getAllUSerCredit($client->idclient);
           } catch (\Throwable $th) {
             //throw $th;
             return response()->json([

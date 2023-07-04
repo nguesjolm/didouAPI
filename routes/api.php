@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ClientController;
-use App\Http\Controllers\livreursController;
+use App\Http\Controllers\LivreurController;
 
 
 
@@ -149,34 +149,34 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 
 
   /*----------------
-  GESTION livreursS
+  GESTION LIVREURS
   ---------------- */
-  //Create livreurss 
-  Route::POST('createlivreurs',[AdminController::class, 'createlivreurs'])->middleware('auth:sanctum');
+  //Create livreurs 
+  Route::POST('createLivreur',[AdminController::class, 'createLivreur'])->middleware('auth:sanctum');
 
-  //Get all livreurss
-  Route::get('getAlllivreurs',[AdminController::class, 'getAlllivreurs'])->middleware('auth:sanctum');
+  //Get all livreurs
+  Route::get('getAllLivreur',[AdminController::class, 'getAllLivreur'])->middleware('auth:sanctum');
 
-  //Get single livreurss
-  Route::get('getSinglelivreurs/{livreurs}',[AdminController::class, 'getSinglelivreurs'])->middleware('auth:sanctum');
+  //Get single livreurs
+  Route::get('getSingleLivreur/{livreur}',[AdminController::class, 'getSingleLivreur'])->middleware('auth:sanctum');
 
-  //Update livreurss
-  Route::POST('updatlivreurs',[AdminController::class, 'updatlivreurs'])->middleware('auth:sanctum');
+  //Update livreurs
+  Route::POST('updatlivreur',[AdminController::class, 'updatlivreur'])->middleware('auth:sanctum');
 
-  //Delete livreurss
-  Route::DELETE('deletelivreurs',[AdminController::class, 'deletelivreurs'])->middleware('auth:sanctum');
+  //Delete livreurs
+  Route::DELETE('deleteLivreur',[AdminController::class, 'deleteLivreur'])->middleware('auth:sanctum');
 
-  //livreurs shipping : enregistrer une livraison
-  Route::POST('livreursLivraison',[AdminController::class, 'livreursLivraison'])->middleware('auth:sanctum');
+  //Livreur shipping : enregistrer une livraison
+  Route::POST('livreurLivraison',[AdminController::class, 'livreurLivraison'])->middleware('auth:sanctum');
 
-  //Listes des commandes d'un livreurs
-  Route::GET('orderliv/{livreursid}',[AdminController::class, 'orderliv'])->middleware('auth:sanctum');
+  //Listes des commandes d'un livreur
+  Route::GET('orderliv/{livreurid}',[AdminController::class, 'orderliv'])->middleware('auth:sanctum');
 
-  //Liste des des commandes en fonction du status_livreurs
-  Route::GET('orderlivreursStat',[AdminController::class, 'orderlivreursStat'])->middleware('auth:sanctum');
+  //Liste des des commandes en fonction du status_livreur
+  Route::GET('orderLivreurStat',[AdminController::class, 'orderLivreurStat'])->middleware('auth:sanctum');
   
-  //Créditer du solde livreurs
-  Route::POST('crediterSoldeLiv',[AdminController::class, 'crediterSoldeLiv'])->middleware('auth:sanctum');
+  //Créditer du solde livreur
+  Route::POST('crediterSoldeLiv',[LivreurController::class, 'crediterSoldeLiv'])->middleware('auth:sanctum');
 
 
 
@@ -197,8 +197,8 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     Route::DELETE('deletOrder/{order}',[AdminController::class, 'deletOrder'])->middleware('auth:sanctum');
     //Details commande :: recupérer les plats d'une commande
     Route::GET('getOrderPlats/{numcomd}',[AdminController::class, 'getOrderPlats'])->middleware('auth:sanctum');
-    //Mise à jour du statut de la commande :: statut_livreurs
-    Route::POST('UpdOrderstatuslivreurs',[AdminController::class, 'UpdOrderstatuslivreurs'])->middleware('auth:sanctum');
+    //Mise à jour du statut de la commande :: statut_livreur
+    Route::POST('UpdOrderstatusLivreur',[AdminController::class, 'UpdOrderstatusLivreur'])->middleware('auth:sanctum');
     //Mise à jour du statut :: statut_client
     Route::POST('UpdOrderstatusClient',[AdminController::class, 'UpdOrderstatusClient'])->middleware('auth:sanctum');
 
@@ -311,7 +311,7 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
      * -------------------
      */
         //Inscription client
-        Route::POST('create_client_Count',[ClientController::class, 'create_client_Count']);
+        Route::POST('createUserCount',[ClientController::class, 'create_client_Count']);
         //Login client
         Route::GET('loginUserCount',[ClientController::class, 'loginUserCount']);
         //Générer un code OTP
@@ -319,7 +319,7 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
         //Check OTP code
         Route::GET('checkOTP',[ClientController::class, 'checkOTP']);
         //resset password
-        Route::GET('newpassword',[ClientController::class, 'newpassword']);
+        Route::PATCH('newpassword',[ClientController::class, 'newpassword'])->middleware('auth:sanctum');
 
     /**
      * -----------
@@ -406,7 +406,7 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 
 
 /*------------------
-    API livreurs
+    API LIVREUR
   ------------------
  */ 
 
@@ -415,33 +415,45 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
      * AUTHENTICATION
      * ---------------
      */
+       //Inscription 
+       Route::POST('inscription_livreur',[LivreurController::class, 'inscription_livreur']);
+       //Connection
+       Route::POST('login_livreur',[LivreurController::class, 'login_livreur']);
+       //Get livreur info
+       Route::GET('get_livreur_info',[LivreurController::class, 'get_livreur_info'])->middleware('auth:sanctum');
+       //Update livreur info
+       Route::PUT('update_livreur_info',[LivreurController::class, 'update_livreur_info'])->middleware('auth:sanctum');
+
+       
+
+       
 
     /**
      * --------------------
-     * COMMANDES livreursS
+     * COMMANDES LIVREURS
      * --------------------
      */
-       //Get all livreurs commandes
-       Route::GET('get_livreurs_comd_all',[livreursController::class, 'get_livreurs_comd_all']);
-       //Get livreurs commande by status
-       Route::GET('get_livreurs_comd_status',[livreursController::class, 'get_livreurs_comd_status']);
-       //Get livreurs commande today
-       Route::GET('get_livreurs_today_command',[livreursController::class, 'get_livreurs_today_command']);
+       //Get all livreur commandes
+       Route::GET('get_livreur_comd_all',[LivreurController::class, 'get_livreur_comd_all'])->middleware('auth:sanctum');
+       //Get livreur commande by status
+       Route::GET('get_livreur_comd_status/{status_commande}',[LivreurController::class, 'get_livreur_comd_status'])->middleware('auth:sanctum');
+       //Get livreur commande today
+       Route::GET('get_livreur_today_command',[LivreurController::class, 'get_livreur_today_command'])->middleware('auth:sanctum');
        //Change commande status
-       Route::GET('change_livreurs_comd_status',[livreursController::class, 'change_livreurs_comd_status']);
+       Route::PUT('change_livreur_comd_status',[LivreurController::class, 'change_livreur_comd_status'])->middleware('auth:sanctum');
 
 
     /**
      * --------------------
-     * SOLDE livreurs 
+     * SOLDE LIVREUR 
      * --------------------
      */
         //Débiter le solde
-        Route::POST('debiter_solde_livreurs',[livreursController::class, 'debiter_solde_livreurs']);
-        //Get livreurs solde
-        Route::GET('get_livreurs_solde',[livreursController::class, 'get_livreurs_solde']);
+        Route::POST('debiter_solde_livreur',[LivreurController::class, 'debiter_solde_livreur'])->middleware('auth:sanctum');
+        //Get livreur solde
+        Route::GET('get_livreur_solde',[LivreurController::class, 'get_livreur_solde'])->middleware('auth:sanctum');
         //Get all transactions
-        Route::GET('get_livreurs_all_transactions',[livreursController::class, 'get_livreurs_all_transactions']);
+        Route::GET('get_livreur_all_transactions',[LivreurController::class, 'get_livreur_all_transactions'])->middleware('auth:sanctum');
 
         
 

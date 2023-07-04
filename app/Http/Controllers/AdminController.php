@@ -157,7 +157,7 @@ class AdminController extends Controller
                 //Validate
                 $validateCatg = Validator::make($request->all(),[
                     'nomcatg' => 'required|min:4|unique:categorie,nomcateg',
-                    'photo' => 'required|mimes:jpeg,jpg,png|max:100M',
+                    'photo' => 'required|mimes:jpeg,jpg,png|max:100000',
                 ]);
                 if ($validateCatg->fails())
                 {
@@ -418,11 +418,11 @@ class AdminController extends Controller
             //setting didou
             function setting(Request $request)
             {
-                $gainlivreurs = $request->gainlivreurs;
+                $gainlivreur = $request->gainlivreur;
                 $gainambassadeur = $request->gainambassadeur;
                 $promoComd = $request->promoComd;
                 $creditDidou = $request->creditDidou;
-                return settingDidou($gainlivreurs,$gainambassadeur,$promoComd,$creditDidou);
+                return settingDidou($gainlivreur,$gainambassadeur,$promoComd,$creditDidou);
             }
             //recuperer les paramètres didou
             function getsetting()
@@ -431,30 +431,30 @@ class AdminController extends Controller
             }
 
         /*----------------
-         GESTION livreursS
+         GESTION LIVREURS
         ---------------- */
-            //Create livreurss
-            function createlivreurs(Request $request)
+            //Create livreurs
+            function createLivreur(Request $request)
             {
                $nom = $request->nom;
                $tel = $request->tel;
                $email = $request->email;
                $local = $request->local;
-               return createlivreurs($nom,$tel,$email,$local);
+               return createLivreur($nom,$tel,$email,$local);
             }
-            //Get all livreurss
-            function getAlllivreurs()
+            //Get all livreurs
+            function getAllLivreur()
             {
-               return getAlllivreurs();
+               return getAllLivreur();
             } 
-            //Get single livreurss
-            function getSinglelivreurs(Request $request)
+            //Get single livreurs
+            function getSingleLivreur(Request $request)
             {
-               $livreurs = $request->livreurs;
-               return getSinglelivreurs($livreurs);
+               $livreur = $request->livreur;
+               return getSingleLivreur($livreur);
             }
-            //Update livreurss
-            function updatlivreurs(Request $request)
+            //Update livreurs
+            function updatlivreur(Request $request)
             {
                $nom = $request->nom;
                $tel = $request->tel;
@@ -470,43 +470,37 @@ class AdminController extends Controller
                  $path = $file->store('categories','public');
                  $photo = $lien.$path;
                 }
-               return updatlivreurs($nom,$tel,$email,$local,$status, $photo,$id); 
+               return updatlivreur($nom,$tel,$email,$local,$status, $photo,$id); 
             }
-            //Delete livreurss
-            function deletelivreurs(Request $request)
+            //Delete livreurs
+            function deleteLivreur(Request $request)
             {
-                $livreurs = $request->livreursid;
-                return deletelivreurs($livreurs);
+                $livreur = $request->livreurid;
+                return deleteLivreur($livreur);
             }
-            //livreurs shipping : enregistrer une livraison
-            function livreursLivraison(Request $request)
+            //Livreur shipping : enregistrer une livraison
+            function livreurLivraison(Request $request)
             {
                $orderid =  $request->orderid;
-               $livreurs =  $request->livreurs;
-               return livreursLivraison($orderid,$livreurs);
+               $livreur =  $request->livreur;
+               return livreurLivraison($orderid,$livreur);
             }
-            //Commande d'un livreurs
+            //Commande d'un livreur
             function orderliv(Request $request)
             {
-                $livreurs =  $request->livreursid;
-                return orderOflivreurs($livreurs);
+                $livreur =  $request->livreurid;
+                return orderOfLivreur($livreur);
             }
 
-            //Liste des des commandes en fonction du status_livreurs
-            function orderlivreursStat(Request $request)
+            //Liste des des commandes en fonction du status_livreur
+            function orderLivreurStat(Request $request)
             {
                 $status = $request->statut;
-                $livreursid = $request->livreursid;
-                return orderlivreursStat($livreursid,$status);
+                $livreurid = $request->livreurid;
+                return orderLivreurStat($livreurid,$status);
             }
 
-            //Incrementation de solde livreurs
-            function crediterSoldeLiv(Request $request)
-            {
-                $livreursid = $request->id_livreurs;
-            
-                return crediterSoldeLiv($livreursid);
-            }        
+                
 
 
         /* ---------------------
@@ -584,12 +578,12 @@ class AdminController extends Controller
                 $numcomd = $request->numcomd;
                 return getOrderPlats($numcomd);
             }
-            //Mise à jour du statut de la commande :: statut_livreurs
-            function UpdOrderstatuslivreurs(Request $request)
+            //Mise à jour du statut de la commande :: statut_livreur
+            function UpdOrderstatusLivreur(Request $request)
             { 
                 $orderid = $request->orderid;
-                $statutlivreurs = $request->statutlivreurs;
-                return UpdOrderstatuslivreurs($orderid,$statutlivreurs);
+                $statutlivreur = $request->statutlivreur;
+                return UpdOrderstatusLivreur($orderid,$statutlivreur);
             }
 
             //Mise à jour du statut de la commande :: statut_client
@@ -610,8 +604,9 @@ class AdminController extends Controller
             function creatcredit(Request $request)
             {
                 try {
-                    $clientid = $request->clientid;
-                    return creatcredit($clientid);
+                    $user = Auth::user();
+                    $client = getSingleClientsUser($user->id);
+                    return creatcredit($client->idclient);
                 } catch (\Throwable $th) {
                     //throw $th;
                     return response()->json([
@@ -638,7 +633,8 @@ class AdminController extends Controller
             function creatambassad(Request $request)
             {
                 $clientid = $request->clientid;
-                return creatambassad($clientid);
+                $client = getSingleClientsUser(Auth::id());
+                return creatambassad($client->idclient);
             }
             //Modifier le statut
             function updambassad(Request $request)
@@ -733,7 +729,7 @@ class AdminController extends Controller
                     $validateUser = Validator::make($request->all(),[
                         'name' => 'required|min:4',
                         'email' => 'required|email|unique:users,email',
-                        'password' => 'required',
+                        'password' => 'required|min:8',
 
                     ]);
 
