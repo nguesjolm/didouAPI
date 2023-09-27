@@ -59,11 +59,11 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
   //Create avis clients
   Route::POST('createAvis',[ClientController::class, 'createAvis'])->middleware('auth:sanctum');
   //Get avis by Mentions
-  Route::GET('getAvisByMentions',[AdminController::class, 'getAvisByMentions'])->middleware('auth:sanctum');
+  Route::POST('getAvisByMentions',[AdminController::class, 'getAvisByMentions'])->middleware('auth:sanctum');
   //Get commentaire by mentions
-  Route::GET('getCommentByMentions',[AdminController::class, 'getCommentByMentions'])->middleware('auth:sanctum');
+  Route::POST('getCommentByMentions',[AdminController::class, 'getCommentByMentions'])->middleware('auth:sanctum');
   //Get commentaire mentions by date
-  Route::GET('getCommentByDateMentions',[AdminController::class, 'getCommentByDateMentions'])->middleware('auth:sanctum');
+  Route::POST('getCommentByDateMentions',[AdminController::class, 'getCommentByDateMentions'])->middleware('auth:sanctum');
 
 
   /*
@@ -107,6 +107,10 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 
   //Delete categories
   Route::DELETE('deleteCatg/{idcatg}',[AdminController::class, 'deleteCatg'])->middleware('auth:sanctum');
+  //Changer le status d'une categorie
+  Route::POST('ChangeStat',[AdminController::class, 'ChangeStat'])->middleware('auth:sanctum');
+
+  
 
 
   /*----------------
@@ -118,10 +122,19 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
   Route::get('getAllRecette',[AdminController::class, 'getAllRecette'])->middleware('auth:sanctum');
   //Get single recette
   Route::get('getSingleRecette/{recetteid}',[AdminController::class, 'getSingleRecette'])->middleware('auth:sanctum');
+  //Get recette recommandée
+  Route::get('getRecommandRecette',[AdminController::class, 'getRecommandRecette'])->middleware('auth:sanctum');
   //Update single recette
   Route::POST('updateRecette',[AdminController::class, 'updateRecette'])->middleware('auth:sanctum');
   //Delete single recette
   Route::DELETE('deleteRecette/{recetteid}',[AdminController::class, 'deleteRecette'])->middleware('auth:sanctum');
+  //Get recette by state
+  Route::GET('getRecettePub/{state}',[AdminController::class, 'getRecettePub'])->middleware('auth:sanctum');
+  //Get recette by recommande
+  Route::GET('getRecetteRecomd/{state}',[AdminController::class, 'getRecetteRecomd'])->middleware('auth:sanctum');
+  //Supprimer la galerie d'une recette
+  Route::DELETE('deletegalerie',[AdminController::class, 'deletegalerie'])->middleware('auth:sanctum');
+  
 
 
   /*----------------
@@ -201,6 +214,13 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     Route::POST('UpdOrderstatusLivreur',[AdminController::class, 'UpdOrderstatusLivreur'])->middleware('auth:sanctum');
     //Mise à jour du statut :: statut_client
     Route::POST('UpdOrderstatusClient',[AdminController::class, 'UpdOrderstatusClient'])->middleware('auth:sanctum');
+    //Affecter une commande au livreur
+    Route::POST('giveOrderToLivreur',[AdminController::class, 'giveOrderToLivreur'])->middleware('auth:sanctum');
+    //Get order by state
+    Route::GET('getOrderState/{state}',[AdminController::class, 'getOrderState'])->middleware('auth:sanctum');
+
+    
+
 
   /* -------------------------
     GESTION DES CREDITS DIDOU
@@ -222,7 +242,7 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
   //liste des ambassadeurs
   Route::GET('getAllambassad',[AdminController::class, 'getAllambassad'])->middleware('auth:sanctum');
   //recuperer un ambassadeur
-  Route::GET('getSinglambassad/{ambasdid}',[AdminController::class, 'getSinglambassad'])->middleware('auth:sanctum');
+  Route::GET('getSinglambassad/{clientID}',[AdminController::class, 'getSinglambassad'])->middleware('auth:sanctum');
   //crediter le solde
   Route::PATCH('creditersoldAmbasad',[AdminController::class, 'creditersoldAmbasad'])->middleware('auth:sanctum');
   //recuperer les commandes d'un ambassadeur
@@ -237,11 +257,16 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
   Route::GET('getallpush',[AdminController::class, 'getallpush'])->middleware('auth:sanctum')->middleware('auth:sanctum');
   //Rechercher une push
   Route::GET('searchPush',[AdminController::class, 'searchPush'])->middleware('auth:sanctum');
+  //Supprimer une campagne push
+  Route::DELETE('deletepush',[AdminController::class, 'deletepush'])->middleware('auth:sanctum');
 
-
+  
+ 
   /* --------------------------
     GESTION DES COMPTES USERS
   -------------------------- */
+  //Generer OTP 
+  Route::POST('generateAdminOTP',[AdminController::class, 'generateAdminOTP']);
   //Create user
   Route::POST('creatuser',[AdminController::class, 'creatuser']);
   //Login user
@@ -258,6 +283,7 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
   Route::GET('getuserauth',[AdminController::class, 'getuserauth'])->middleware('auth:sanctum');
   //Logout user
   Route::GET('logout',[AdminController::class, 'logout'])->middleware('auth:sanctum');
+  
   
   /**
    * --------------
@@ -285,7 +311,7 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     //changer le status d'une zone
     Route::PATCH('updstatuszone',[AdminController::class, 'updstatuszone'])->middleware('auth:sanctum');
     //Commande by zone
-    Route::GET('getOrderzone/{zoneid}',[AdminController::class, 'getOrderzone'])->middleware('auth:sanctum');
+    Route::GET('getOrderzone',[AdminController::class, 'getOrderzone'])->middleware('auth:sanctum');
   
   /**
    * ---------------
@@ -310,16 +336,20 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
      * USER AUTHENTICATION
      * -------------------
      */
+
         //Inscription client
-        Route::POST('createUserCount',[ClientController::class, 'create_client_Count']);
+        Route::POST('createClientCount',[ClientController::class, 'createClientCount']);
         //Login client
-        Route::GET('loginUserCount',[ClientController::class, 'loginUserCount']);
+        Route::POST('loginUserCount',[ClientController::class, 'loginUserCount']);
         //Générer un code OTP
-        Route::GET('generateOTP',[ClientController::class, 'generateOTP']);
+        Route::POST('generateOTP',[ClientController::class, 'generateOTP']);
         //Check OTP code
-        Route::GET('checkOTP',[ClientController::class, 'checkOTP']);
+        Route::POST('checkOTP',[ClientController::class, 'checkOTP']);
         //resset password
-        Route::PATCH('newpassword',[ClientController::class, 'newpassword'])->middleware('auth:sanctum');
+        Route::POST('newpassword',[ClientController::class, 'newpassword'])->middleware('auth:sanctum');
+        //update tokenFCM
+        Route::PUT('updateTokenFCM',[ClientController::class, 'updateTokenFCM']);
+
 
     /**
      * -----------
@@ -358,7 +388,7 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
         //Note Client command
         Route::POST('noteClientComd',[ClientController::class, 'noteClientComd'])->middleware('auth:sanctum');
         //Get Client command status
-        Route::GET('getClientComdstatus',[ClientController::class, 'getClientComdstatus'])->middleware('auth:sanctum');
+        Route::GET('getClientComdstatus/{commande_status}',[ClientController::class, 'getClientComdstatus'])->middleware('auth:sanctum');
         //Get Client command by id
         Route::GET('getClientComdId',[ClientController::class, 'getClientComdId'])->middleware('auth:sanctum');
         //Get Client's all command
@@ -391,10 +421,16 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
      * PAIEMENT CINETPAY
      * --------------------
      */
-      //Traitemnet du notify
-      Route::match(["get","post"],'return_pay',[ClientController::class,'return']);
-      //Traitement du return
-      Route::match(["get","post"],'notify_pay',[ClientController::class,'notify']);
+      //Traitemnet du notify :: PAY IN
+      Route::match(["get","post"],'notify_pay',[ClientController::class,'notify_pay']);
+      //Traitement du return ::  PAY IN
+      Route::match(["get","post"],'return_pay',[ClientController::class,'return_pay']);
+      //Traitement du notify :: PAY OUT
+      Route::match(["get","post"],'notify_transfert',[ClientController::class,'notify_transfert']);
+      //Traitement du return :: PAY OUT
+      Route::match(["get","post"],'return_transfert',[ClientController::class,'return_transfert']);
+
+
 
 
 
@@ -422,7 +458,7 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
        //Get livreur info
        Route::GET('get_livreur_info',[LivreurController::class, 'get_livreur_info'])->middleware('auth:sanctum');
        //Update livreur info
-       Route::PUT('update_livreur_info',[LivreurController::class, 'update_livreur_info'])->middleware('auth:sanctum');
+       Route::POST('update_livreur_info',[LivreurController::class, 'update_livreur_info'])->middleware('auth:sanctum');
 
        
 
@@ -437,6 +473,8 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
        Route::GET('get_livreur_comd_all',[LivreurController::class, 'get_livreur_comd_all'])->middleware('auth:sanctum');
        //Get livreur commande by status
        Route::GET('get_livreur_comd_status/{status_commande}',[LivreurController::class, 'get_livreur_comd_status'])->middleware('auth:sanctum');
+       //Get livreur commande today by status
+       Route::GET('get_livreur_today_command_status/{status}',[LivreurController::class, 'get_livreur_today_command_status'])->middleware('auth:sanctum');
        //Get livreur commande today
        Route::GET('get_livreur_today_command',[LivreurController::class, 'get_livreur_today_command'])->middleware('auth:sanctum');
        //Change commande status

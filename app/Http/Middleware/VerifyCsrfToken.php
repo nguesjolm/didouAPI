@@ -16,7 +16,9 @@ class VerifyCsrfToken extends Middleware
         /* --------------
           SYSTEM DE PAIEMENT
         ----------------*/
-        'notify_pay',
-        'return_pay'
+        'api/notify_pay',
+        'api/return_pay',
+        'api/notify_transfert',
+        'api/return_transfert'
     ];
 }

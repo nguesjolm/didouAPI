@@ -8,8 +8,9 @@ use App\Models\User;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
-
-
+use Illuminate\Support\MessageBag;
+use App\Cinetpay\CinetPayService;
+use App\Cinetpay\CinetPayService\CinetPayService as CinetPayServiceCinetPayService;
 
 class ClientController extends Controller
 {
@@ -24,25 +25,68 @@ class ClientController extends Controller
          * @param Request $request
          * @return Client 
         */
-        function create_client_Count(Request $request)
+        function createClientCount(Request $request)
         {
             try {
-                //validated
-                $validateClient = Validator::make($request->all(),[
-                    'nom' => 'required|min:4',
-                    'email' => 'email|unique:users',
-                    'tel' => 'required|min:10|max:10|unique:users',
-                    'password' => 'required|min:8',
-                ]);
-                if ($validateClient->fails()) 
-                {
-                        return response()->json(['statusCode'=>'401',
-                                                'status'=>'false',
-                                                'message'=>'Erreur de validation',
-                                                'data'=> '',
-                                                'error'=> $validateClient->errors(),
-                                                ]);
+
+                $validateTel = Validator::make($request->all(),['tel' => 'required|min:10|max:10|unique:users']);
+                if ($validateTel->fails()) {
+                    $errorMsg="";
+                    if (strlen($request->tel)!=10) {
+                        $errorMsg = "le numéro doit comporter 10 chiffre";
+                    }else{
+                        $errorMsg = "le numéro existe déjà";
+                    }
+                    return response()->json(['statusCode'=>'406',
+                                                    'status'=>'false',
+                                                    'message'=>$errorMsg
+                                                    ],406);
                 }
+
+                $validateEmail = Validator::make($request->all(),['email' => 'email|unique:users']);
+                if ($validateEmail->fails()) {
+                    $errorMsg ='Cet email existe déjà';
+                    return response()->json(['statusCode'=>'406',
+                                                    'status'=>'false',
+                                                    'message'=>$errorMsg
+                                                    ],406);
+                }
+
+                $validateNom = Validator::make($request->all(),['nom' => 'required|min:4']);
+                if ($validateNom->fails()) {
+                    // $errorMsg ='Cet email existe déjà';
+                    if (strlen($request->nom)<4) {
+                        $errorMsg = "le nom doit comporter au moins 4 caractères";
+                    }else{
+                        $errorMsg = "le nom est obligatoire";
+                    }
+                    return response()->json(['statusCode'=>'406',
+                                                    'status'=>'false',
+                                                    'message'=> $errorMsg
+                                                    ],406);
+                }
+
+                $validatePass = Validator::make($request->all(),['password' => 'required|min:8']);
+                if ($validatePass->fails()) {
+                    if (strlen($request->password)<8) {
+                        $errorMsg = "le mot de passe doit comporter au moins 8 caractères";
+                    }else{
+                        $errorMsg = "le mot de passe est obligatoire";
+                    }
+                    return response()->json(['statusCode'=>'406',
+                                            'status'=>'false',
+                                            'message'=> $errorMsg
+                                            ],406);
+                }
+
+                if($request->password != $request->password2)
+                {
+                    return response()->json(['statusCode'=>'406',
+                                            'status'=>'false',
+                                            'message'=> 'Mot de passe doit être identique'
+                                            ],406);
+                }
+
                 $password = Hash::make($request->password);
                 $user = User::create([
                     'name'     => $request->nom,
@@ -51,17 +95,21 @@ class ClientController extends Controller
                     'password' => $password
                 ]);
 
-                $client = Client::create(['status'        => 1,
+                $client = Client::create(['status'        => 'inactif',
                                           'ambassadeur'   => $request->parain,
                                           'iduser'        => $user->id,
+                                          'tokenFCM'      => '',
                                           'date_creation' => date('d/m/Y')
                                         ]);
-                
+                $otpmsg = generateOTP($request->tel).": Votre code de validation Didou";
+                Sendsms($otpmsg,"225".$request->tel,"DIDOU");
                 return response()->json([
                                          'statusCode' =>200,
                                          'status'     => true,
-                                         'message'    => 'Ouverture de compte client effectué  avec succès',
-                                         'dataclient' => $user,
+                                         'message'    => 'Ouverture de compte client effectué  avec succès '.$otpmsg,
+                                         'user'       => $user,
+                                         'infoclient' => $client,
+                                         'otp'        => $otpmsg,
                                          'token'      => $user->createToken("API TOKEN")->plainTextToken
                                         ]);
             } catch (\Throwable $th) {
@@ -74,44 +122,89 @@ class ClientController extends Controller
             }
         }
 
+        //Update client TokenFCM
+        function updateTokenFCM(Request $request)
+        {
+           try {
+              updateFCM($request->idclient,$request->token);
+              return response()->json([
+                 'info'   => 'FCM TOKEN added',
+                 'token'  => $request->token,
+                 'status' => true
+              ], 200);
+            } catch (\Throwable $th) {
+             //throw $th;
+             return response()->json([
+                'error' => 'Error adding FCM TOKEN',
+                'message' => $th->getMessage()
+             ], 500);
+            }
+        }
+
         //Login user
         function loginUserCount(Request $request)
         {
         
             try {
                 //validated
-                $valideClient = Validator::make($request->all(),[
-                    'tel' => 'required|min:10|max:10',
-                    'password' => 'required',
-                ]);
-                if ($valideClient->fails()) 
-                {
-                        return response()->json(['statusCode'=>'401',
-                                                 'status'=>'false',
-                                                 'message'=>'Erreur de validation',
-                                                 'data'=> '',
-                                                 'error'=> $valideClient->errors(),
-                                                ]);
+                $validateTel = Validator::make($request->all(),['tel' => 'required|min:10|max:10']);
+                if ($validateTel->fails()) {
+                    $errorMsg="";
+                    if (strlen($request->tel)!=10) {
+                        $errorMsg = "le numéro doit comporter 10 chiffre";
+                    }else{
+                        $errorMsg = "le numéro existe déjà";
+                    }
+                    return response()->json(['statusCode'=>'406',
+                                                    'status'=>'false',
+                                                    'message'=>$errorMsg
+                                                    ],406);
+                }
+
+                $validatePass = Validator::make($request->all(),['password' => 'required|min:8']);
+                if ($validatePass->fails()) {
+                    if (strlen($request->password)<8) {
+                        $errorMsg = "le mot de passe doit comporter au moins 8 caractères";
+                    }else{
+                        $errorMsg = "le mot de passe est obligatoire";
+                    }
+                    return response()->json(['statusCode'=>'406',
+                                            'status'=>'false',
+                                            'message'=>$errorMsg
+                                            ],406);
                 }
 
                 if (!Auth::attempt($request->only(['tel','password']))) 
                 {
                         return response()->json([
-                            'statusCode'=>401,
+                            'statusCode'=>404,
                             'status' => false,
-                            'message' => "Le numéro et le mot de passe ne correspondent pas à nos enregistrement",
-                        ], 401);
+                            'message' => "Le numéro ou le mot de passe ne correspondent pas à nos enregistrement",
+                        ], 404);
                 }
 
                 $user = User::where('tel', $request->tel)->first();
+                $client = Client::firstWhere('iduser',$user->id);
+                if ($user->role=='client'&& $client->status=='actif') {
+                    return response()->json([
+                        'statusCode'     =>200,
+                        'status'         => true,
+                        'message'        => "Le client s'est connecté avec succès",
+                        'data_user'      => $user,
+                        'client'         => $client,
+                        'token'          => $user->createToken("API TOKEN")->plainTextToken,
+                       ], 200);
+                }else{
+                    return response()->json([
+                        'statusCode'  =>402,
+                        'status'      => true,
+                        'message'     => "Compte inactif",
+                        'data_client' => '',
+                        'client'      => '',
+                       ], 401);
+                }
                
-                return response()->json([
-                                         'statusCode'=>200,
-                                         'status' => true,
-                                         'message' => "Le client s'est connecté avec succès",
-                                         'dataclient' => $user,
-                                         'token' => $user->createToken("API TOKEN")->plainTextToken,
-                                        ], 200);
+                
 
             } catch (\Throwable $th) {
                 //throw $th;
@@ -131,18 +224,18 @@ class ClientController extends Controller
                 $user = User::where('tel', $request->tel)->first();
                 if ($user) {
                     # Send sms
-                    $msg = generateOTP().": Votre code de validation Didou";
+                    $msg = generateOTP($request->tel).": Votre code de validation Didou";
                     Sendsms($msg,"225".$tel,"DIDOU");
                     return response()->json(['statusCode' => 200,
                                              'status'     => true,
-                                             'message'    => $msg,
+                                             'message'    => $msg
                                             ], 200); 
                 }else {
                     return response()->json([
-                        'statusCode'=>401,
+                        'statusCode'=>404,
                         'status' => false,
                         'message' => "Le numéro de téléphone ne correspond pas à nos enregistrement",
-                    ], 401);
+                    ], 404);
                 }
             } catch (\Throwable $th) {
                 //throw $th;
@@ -157,39 +250,39 @@ class ClientController extends Controller
         //Check OTP code
         function checkOTP(Request $request)
         {
+           
            try {
-                //Validated
-                $valideOTP = Validator::make($request->all(),
-                [
-                    'OTP' => 'required'
-                ]);
-                if ($valideOTP->fails())
-                {
-                    return response()->json([
-                        'statusCode'=>401,
-                        'status' => false,
-                        'message' => 'Erreur de validation',
-                        'errors' => $valideOTP->errors()
-                    ], 401);
-                }
-
                 //Check
-                $res = checkOTP($request->OTP);
+                $res = checkOTP($request->otp,$request->tel);
                 if ($res) {
-                    updateOTP($request->OTP);
+                    $livreur = '';
+                    $client ='';
+                    updateOTP($request->otp);
+                    $user = User::where('tel', $request->tel)->first();
+                    if($user->role=='client'){
+                        Client::where('iduser', $user->id)->update(['status' => 'actif']);
+                        $client =  client::firstWhere('iduser', $user->id);
+                    }
+                    if ($user->role=='livreur') {
+                        $livreur = getLivreurInfo($user->id);
+                    }
+                    
                     return response()->json([
                         'statusCode' =>200,
                         'status'     => true,
-                        'datacode' => $res,
-                        'message'    => "Réinitialiser votre mot de passe",
+                        'message'    => "Compte recupéré avec succès",
+                        'data'       => $user,
+                        'livreur'    => $livreur,
+                        'client'     => $client,
+                        'token'      => $user->createToken("API TOKEN")->plainTextToken,
                     ], 200);
                 }else{
-                    updateOTP($request->OTP);
+                    updateOTP($request->otp);
                     return response()->json([
-                        'statusCode'=>401,
+                        'statusCode'=>404,
                         'status' => false,
-                        'message' => "Code erroné, veuillez générer un nouveau code",
-                    ], 401);
+                        'message' => "Code erroné",
+                    ], 404);
                 }
            } catch (\Throwable $th) {
                 //throw $th;
@@ -204,7 +297,7 @@ class ClientController extends Controller
         //Resset password
         function newpassword(Request $request)
         {
-
+       
             try {
                 //validated
                 $validateUser = Validator::make($request->all(),
@@ -215,25 +308,32 @@ class ClientController extends Controller
                 if ($validateUser->fails())
                 {
                     return response()->json([
-                        'statusCode'=>401,
+                        'statusCode'=>406,
                         'status' => false,
                         'message' => 'Erreur de validation',
-                        'errors' => $validateUser->errors()
-                    ], 401);
+                        'errors' =>'Le mot de passe est obligatoire'
+                    ], 406);
                 }
 
-                if ($request->password!='') 
-                {
-                    
-                    User::where('id', Auth::id())
-                         ->update(['password' => $request->password]);
-                    
+                  $user = Auth::user();
+                  $pass_new = Hash::make($request->password);
+                  #Comparer l'ancien mot de passe saisi au mot de passe existant
+                  if (Hash::check($request->old_password, $user->password)) {
+                    User::where('id', $user->id)
+                        ->update(['password' => $pass_new]);
                     return response()->json(['statusCode'=>200,
                                              'status' => true,
                                              'message' => "Mise à jour effectuée avec succès, veuillez vous connectez avec votre nouveau mot de passe",
                                             ], 200);
+                  }else{
+                    return response()->json(['statusCode'=>406,
+                                             'status' => false,
+                                             'message' => "ancien mot de passe incorrecte",
+                                           ], 406);
+                  }
+                    
 
-                }
+              
                 
              
             } catch (\Throwable $th) {
@@ -245,6 +345,8 @@ class ClientController extends Controller
                 ], 500);
             }
         }
+
+
 
     /**
      * ----------------
@@ -268,7 +370,7 @@ class ClientController extends Controller
        //Update user infos
        function updateclientInfos(Request $request)
        {
-             $password = Hash::make($request->password);
+            //  $password = Hash::make($request->password);
              $user = Auth::user();
              if ($request->name!='') {
                 User::where('id', $user->id)
@@ -285,10 +387,10 @@ class ClientController extends Controller
                      ->update(['tel' => $request->tel]);
              }
 
-             if ($request->password!='') {
-                User::where('id', $user->id)
-                     ->update(['password' => $password]);
-             }
+            //  if ($request->password!='') {
+            //     User::where('id', $user->id)
+            //          ->update(['password' => $password]);
+            //  }
 
             return response()->json([
                                     'statusCode'=>200,
@@ -323,7 +425,40 @@ class ClientController extends Controller
        function rembourserCreditUser(Request $request)
        {
         try {
-            return rembourserCreditUser($request->code_credit);
+
+            /**
+             * ----------------------
+             *  LANCEMENT DE CINETPAY
+             * ----------------------
+             */
+              # Etape 1: Préparation du Guichet de paiement
+              $user = Auth::user();
+              $client = getSingleClientsUser($user->id);
+              $transaction_id = date("YmdHis");
+              $description_trans = $request->code_credit;
+              $client_name = $user->name;
+              $client_surname =  $user->name;
+              $client_phone = $user->tel;
+              $client_email = $user->email?:support();
+              $datePay = date("d-m-Y H:i:s");
+              $notify_url = "notify_pay";
+              $return_url = "return_pay";
+              # Etape 2: Enregistrer la transaction et le paiement
+              $type_paiement = "credit";
+              $credit = CheckCredit($request->code_credit,$client->idclient);
+              if ( $credit ) {
+                 savePay($transaction_id,$type_paiement,$credit->montant,$description_trans,$client_name,$client_surname,$client_phone,$client_email,$client->iduser);
+                 # Etape 3: Lancer le Guichet de paiement
+                 return  Guichet($transaction_id,$credit->montant,$description_trans,$client_name,$client_surname,$client_phone,$client_email,$notify_url,$return_url);
+              }else{
+                return response()->json([
+                    'statusCode'=>404,
+                    'status' => false,
+                    'message' =>"ce code crédit n'existe pas"
+                ], 404);
+              }
+            
+            // return rembourserCreditUser($request->code_credit);
         } catch (\Throwable $th) {
             //throw $th;
             return response()->json([
@@ -342,93 +477,142 @@ class ClientController extends Controller
       //Add client command
       function addClientComd(Request $request)
       {
+      
         try {
             //Validated
             $validateComd = Validator::make($request->all(),[
-                'clientid'   => 'required',
                 'montant' => 'required',
                 'qte' => 'required|min:1',
-                'gps' => 'required',
                 'zoneid' => 'required',
                 'dateComd' => 'required',
                 'statutClient' => 'required',
-                'data_recettes' => 'required|min:1'
+                'plats' => 'required'
             ]);
 
             if ($validateComd->fails())
             {
                 return response()->json([
-                    'statusCode'=>401,
+                    'statusCode'=>404,
                     'status' => false,
                     'message' => 'Erreur de validation',
                     'errors' => $validateComd->errors()
-                ], 401);
+                ], 404);
             }
-            $clientid         = $request->clientid;
-            $ambassadeur_code = $request->ambassadeur_code;
             $credit_didou     = $request->credit_didou;
             $montant          = $request->montant;
-            $precision_plats  = $request->precision_plats;
             $qte              = $request->qte;
-            $gps              = $request->gps;
+            $longitude        = $request->longitude;
+            $largitude        = $request->largitude;
             $zoneid           = $request->zoneid;
             $dateComd         = $request->dateComd;
             $statutClient     = $request->statutClient;
-            $data_recettes    = $request->data_recettes;
+            $plats            = $request->plats;
             $montantPay       = $montant;
+            $zoneprecise      = $request->zoneprecise;
+           
+            //infos setting
+            $setting = getSettingIn();
+            //Infos du client
+            $user = Auth::user();
+            $client = getSingleClientsUser($user->id);
+            if ($client->status == 'inactif') {
+                return response()->json([
+                    'statusCode'=>401,
+                    'status' => false,
+                    'message' =>"votre compte est inactif"
+                ], 401);
+            }
+           
+            
 
             //Step 1 : vérifier le credit_didou + Faire une réduction du prix de la commande avec le montant de crédit paramétré et définir le nouveau montant
             if ($credit_didou!='') {
-                $dataCredit = CheckCredit($credit_didou,$clientid);
-                //Check crédit non utilisé
-                if ($dataCredit->credit_used=="true") {
-                    return response()->json([
-                        'statusCode'=>401,
-                        'status' => false,
-                        'message' => "Crédit Didou invalide, le code a déjà été utilisé",
-                        'errors' => $validateComd->errors()
-                    ], 401);
-                }else{
-                   
-                    //Montant crédit
-                    $montant_credit = $dataCredit->montant;
-                    //Vérification du montant
-                    if($montant_credit > $montant)
-                    {
+                $dataCredit = CheckCredit($credit_didou,$client->idclient);
+                if ($dataCredit) {
+                    //Check crédit non utilisé
+                    if ($dataCredit->credit_used=="true") {
                         return response()->json([
-                            'statusCode'=>401,
+                            'statusCode'=>404,
                             'status' => false,
-                            'message' => "Le montant minimum de la commande doit être :".$montant_credit." Fcfa pour utiliser le crédit Didou",
+                            'message' => "Crédit Didou invalide, le code a déjà été utilisé",
                             'errors' => $validateComd->errors()
-                        ], 401);
-                    }
-                    elseif ($montant_credit <= $montant)
-                    {
-                        $montantPay = $montant - $montant_credit;
+                        ], 404);
+                    }else{
+                    
+                        //Montant crédit
+                        $montant_credit = $dataCredit->montant;
+                        //Vérification du montant
+                        if($montant_credit > $montant)
+                        {
+                            return response()->json([
+                                'statusCode'=>404,
+                                'status' => false,
+                                'message' => "Le montant minimum de la commande doit être ".formatPrice($montant_credit)." Fcfa pour utiliser le crédit Didou",
+                                'errors' => $validateComd->errors()
+                            ], 404);
+                        }
+                        elseif ($montant_credit <= $montant)
+                        {
                         
+                            $montantPay = $montant - $montant_credit;                    
+                        }
                     }
+                   
+                }else{
+                    return response()->json([
+                        'statusCode'=>404,
+                        'status' => false,
+                        'message' => "Ce code crédit n'existe pas",
+                        'errors' => $validateComd->errors()
+                    ], 404);
                 }
-               
             }
-            if ($montantPay==0 && $credit_didou!=''&&$dataCredit->credit_used=="false") {
+
+            //Step 2 : Vérification réduction en cas de compte client affilié et qu'un code crédit est actif
+            if ($client->ambassadeur!='aucun' && $montantPay>0) {
+                $montantPay = $montantPay - ($montantPay*$setting->commandeAffilier/100);
+            }
+            //Step 2: cas où le compte client est  affilié et qu'il n'y a aucun code crédit actif
+            if ($client->ambassadeur!='aucun' && $credit_didou=='') {
+               $montantPay = $montant - ($montant*$setting->commandeAffilier/100);
+            }
+            //Step 2: cas où le compte client n'est pas affilié et qu'il n'a pas de code crédit actif
+            if ($client->ambassadeur=='aucun' && $credit_didou=='') {
+                $montantPay = $montant;
+            }
+
+          
+
+            if ($montantPay==0 && $credit_didou!=''  && $dataCredit->credit_used=="false") {
                
-            
+               
                     # Change credit_didou_status used on : true => utilisé
                     credit_used_status($credit_didou,"true");
                     # Enregistrer la commande
                     $numComd = NumComd();
-                    saveCommand($clientid,$ambassadeur_code,$credit_didou,$montant,$qte,$gps,$zoneid,$dateComd,$statutClient,$numComd,$precision_plats);
+                    saveCommand($client->idclient,$client->ambassadeur,$credit_didou,$montant,$montantPay,$qte,$zoneid,$dateComd,$statutClient,$numComd,$longitude,$largitude,$zoneprecise);
                     # Enregistrer chaque produit de la commande
-                    foreach ($data_recettes as $key => $value) 
-                    {
-                         savecomprod($value['platId'],$value['qte'],$value['amount'],$numComd,$clientid);
+                  
+                    foreach ($plats as  $value) 
+                    {   
+                        //enregistrer le plat
+                        $plat =  getplatbyID($value['id_plat']);
+                        savecomprod($value['id_plat'],$value['qte'],$plat->prix*$value['qte'],$numComd,$client->idclient,$value['precision']);
+                        //enregistre le supplement
+                        foreach ($value['supplement'] as $supplement) {
+                            saveCommandSupplement($numComd,$value['id_plat'],$supplement);
+                        }
                     }
-                    # Créditer solde ambassadeur
-                    if ($ambassadeur_code!='') 
+                    // # Créditer solde ambassadeur
+                    if ($client->ambassadeur) 
                     {
-                        creditersoldAmbasad($ambassadeur_code);
+                        creditersoldAmbasad($client->ambassadeur);
+                        #Push à l'ambassadeur
+                        sendPush($client->tokenFCM,'Ambassadeur','cher ambassadeur votre solde a été crédité','','AMBASSADOR_ACTION');
                     }
-                     #Retour
+                    //push de conmmande validée au client
+                    sendPush($client->tokenFCM,'Commande','votre commande a été validée, la livraison est en cours','','DELIVERING');
+                    //Retour
                      return response()->json(['statusCode'=>'200',
                                          'status'=>'true',
                                          'message'=>"Commande validée avec succès",
@@ -450,16 +634,28 @@ class ClientController extends Controller
                  $client_email = $user->email?:support();
                  $notify_url = "notify_pay";
                  $return_url = "return_pay";
-                    # Etape 2 : Enregistrer la transaction et le paiement
-                     $type_paiement = "commande";
-                     #Save payment
-                     savePay($transaction_id,$type_paiement,$montant,$description_trans,$client_name,$client_surname,$client_phone,$client_email);
-                     #Save transaction
-                     saveTransaction($clientid,$ambassadeur_code,$credit_didou,$montant,$qte,$gps,$zoneid,$dateComd,$statutClient,$data_recettes,$transaction_id);
-                    # Etape 3 : Lancer le Guichet de paiement
-                     return  Guichet($transaction_id,$montant,$description_trans,$client_name,$client_surname,$client_phone,$client_email,$notify_url,$return_url);
+                 # Etape 2 : Enregistrer la transaction et le paiement
+                 $type_paiement = "commande";
+                 $numComd = NumComd();
+                 $dateComd = date("d-m-Y H:i:s");
+                 #Save transaction :: save commande
+                 saveTransaction($client->idclient,$numComd,$longitude,$largitude,$montantPay,$client->ambassadeur,$credit_didou,$montant,$qte,$zoneid,$dateComd,$statutClient,$transaction_id,$zoneprecise);
+                 #Save commande details ::  Enregistrer chaque produit de la commande
+                  foreach ($plats as  $value) 
+                  {   
+                      //enregistrer le plat
+                      $plat =  getplatbyID($value['id_plat']);
+                      savecomprod($value['id_plat'],$value['qte'],$plat->prix*$value['qte'],$numComd,$client->idclient,$value['precision']);
+                      //enregistre le supplement
+                      foreach ($value['supplement'] as $supplement) {
+                          saveCommandSupplement($numComd,$value['id_plat'],$supplement);
+                      }
+                  }
+                  #Save payment
+                  savePay($transaction_id,$type_paiement,$montantPay,$description_trans,$client_name,$client_surname,$client_phone,$client_email,$client->iduser);
+                 #Etape 3 : Lancer le Guichet de paiement
+                 return  Guichet($transaction_id,$montantPay,$description_trans,$client_name,$client_surname,$client_phone,$client_email,$notify_url,$return_url);
 
-                 
             }
             
         } catch (\Throwable $th) {
@@ -484,11 +680,11 @@ class ClientController extends Controller
                 if ($validate_Comd->fails())
                 {
                     return response()->json([
-                        'statusCode'=>401,
+                        'statusCode'=>404,
                         'status' => false,
                         'message' => 'Erreur de validation',
                         'errors' => $validate_Comd->errors()
-                    ], 401);
+                    ], 404);
                 }
 
                 return updateClientComdstatus($request->statut_client,$request->id_commandes);
@@ -509,11 +705,11 @@ class ClientController extends Controller
                 if ($validate_avis->fails())
                 {
                     return response()->json([
-                        'statusCode'=>401,
+                        'statusCode'=>404,
                         'status'    => false,
                         'message'   => 'Erreur de validation',
                         'errors'    => $validate_avis->errors()
-                    ], 401);
+                    ], 404);
                 }
                 $mentions = $request->mentions;
                 $commentaires = $request->commentaires;
@@ -532,23 +728,15 @@ class ClientController extends Controller
       function getClientComdstatus(Request $request)
       {
          try {
-            //validated
-            $validate_Comd = Validator::make($request->all(),[
-                'commande_status' => 'required',
-                'client_id'   => 'required',
-            ]);
-            if ($validate_Comd->fails())
-            {
-                return response()->json(['statusCode'=>401,
-                                         'status' => false,
-                                         'message' => 'Erreur de validation',
-                                         'errors' => $validate_Comd->errors()
-                                       ], 401);
-            }
-
-            return getClientComdstatus($request->client_id,$request->commande_status);
+            $user = Auth::user();
+            $client = getSingleClientsUser($user->id);
+            return getClientComdstatus($client->idclient,$request->commande_status);
          } catch (\Throwable $th) {
             //throw $th;
+            return response()->json(['statusCode'=>500,
+                                     'status' => false,
+                                     'message' => $th->getMessage()
+                                   ], 500);
          }
       }
       //Get client's all command
@@ -556,20 +744,9 @@ class ClientController extends Controller
       {
         try {
              //Validated
-             $validate_client = Validator::make($request->all(),[
-                'client_id'     => 'required'
-             ]);
-             if ($validate_client->fails())
-             {
-                return response()->json([
-                    'statusCode'=>401,
-                    'status'    =>false,
-                    'message'   =>'Erreur de validation',
-                    'errors'    =>$validate_client->errors()
-                ], 401);
-             }
-             
-             return getClientComdAll($request->client_id);
+             $user = Auth::user();
+             $client = getSingleClientsUser($user->id);
+             return getClientComdAll($client->idclient);
 
          } catch (\Throwable $th) {
             //throw $th;
@@ -593,11 +770,11 @@ class ClientController extends Controller
             if ($validate_Comd->fails())
             {
                 return response()->json([
-                    'statusCode'=>401,
+                    'statusCode'=>404,
                     'status' => false,
                     'message' => 'Erreur de validation',
                     'errors' => $validate_Comd->errors()
-                ], 401);
+                ], 404);
             }
 
             return updateClientComdstatus($request->statut_commande,$request->id_commandes);
@@ -631,14 +808,14 @@ class ClientController extends Controller
         if ($validatedAmb->fails())
         {
             return response()->json([
-                'statusCode'=>401,
+                'statusCode'=>404,
                 'status' => false,
                 'message' => 'Erreur de validation',
                 'errors' => $validatedAmb->errors()
-            ], 401);
+            ], 404);
         }
-
-        return debiterSoldAmbasad($request->code_ambassadeur,$request->montant);
+       
+        return debiterSoldAmbasad($request->code_ambassadeur,$request->montant,$request->method);
       }
     
     /**
@@ -660,18 +837,18 @@ class ClientController extends Controller
             if ($validate_Push->fails())
             {
                 return response()->json([
-                    'statusCode'=>401,
+                    'statusCode'=>404,
                     'status' => false,
                     'message' => 'Erreur de validation',
                     'errors' => $validate_Push->errors()
-                ], 401);
+                ], 404);
             }
             $titre   = $request->titre;
             $message = $request->message;
             $state   = $request->state;
             $id_user = $request->id_user;
           
-            return addUserPush($titre,$message,$state,$id_user);
+            return addUserPush($titre,$message,$state,$request->status,$id_user);
          } catch (\Throwable $th) {
             //throw $th;
             return response()->json([
@@ -685,21 +862,7 @@ class ClientController extends Controller
       function getUserPush(Request $request)
       {
          try {
-            $validate_Push = Validator::make($request->all(),[
-                'id_user' => 'required'
-            ]);
-
-            if ($validate_Push->fails())
-            {
-                return response()->json([
-                    'statusCode'=>401,
-                    'status' => false,
-                    'message' => 'Erreur de validation',
-                    'errors' => $validate_Push->errors()
-                ], 401);
-            }
-
-            return getUserPush($request->id_user);
+            return getUserPush(Auth::id());
          } catch (\Throwable $th) {
             //throw $th;
             return response()->json([
@@ -720,11 +883,11 @@ class ClientController extends Controller
             if ($validate_Push->fails())
             {
                 return response()->json([
-                    'statusCode'=>401,
+                    'statusCode'=>404,
                     'status' => false,
                     'message' => 'Erreur de validation',
                     'errors' => $validate_Push->errors()
-                ], 401);
+                ], 404);
             }
             
             return deleteUserPush($request->id_push);
@@ -743,11 +906,11 @@ class ClientController extends Controller
      *  PAIEMENT SYSTEM CONTROLE
      * -------------------------
      */
-       //notify
-       function notify(Request $request)
+       //notifypay :: PAY IN
+       function notify_pay(Request $request)
        {
             //Id transaction
-             $id_transaction = $request->cpm_trans_id; 	
+            $id_transaction = $request->cpm_trans_id; 	
             //apiKey
              $apikey = apikey();
             //Veuillez entrer votre siteId
@@ -756,10 +919,11 @@ class ClientController extends Controller
              $version = "V2";
             //Verification du paiement
              $pay = checkPayment($id_transaction);
-            
-            if ($pay->state!=1) {
-              //Nouveau paiement
-              $curl = curl_init();
+          
+            if ($pay) {
+              if ($pay->state!=1) {
+                //Nouveau paiement
+                $curl = curl_init();
                 curl_setopt_array($curl, array(
                     CURLOPT_URL => 'https://api-checkout.cinetpay.com/v2/payment/check',
                     CURLOPT_RETURNTRANSFER => true,
@@ -787,16 +951,148 @@ class ClientController extends Controller
 
                 #Traitement en cas de paiement succès
                 if ($result->{'code'}=='00') {
-                    # Cas 1 : Paiement de commande
+                    #Changer le statut de paiement :: en 1 pour paiement succès
+                    $payment = getTransPay($id_transaction);
+                    $user    = $payment->user_id;
+                    $client = getSingleClientsUser($user);
+                    updatePayState($id_transaction);
+                    # Enregistrement de la commande
+                    $commande = getTransComd($id_transaction);
+                    
+                    if ($payment->type_paiement=='commande') {
+                        
+                        saveCommand($commande->clientid,$commande->ambassadeur_code,$commande->credit_didou,$commande->montant,$commande->montantpay,$commande->qte,$commande->zoneid,$commande->dateComd,$commande->statutClient,$commande->numcomd,$commande->longitude,$commande->largitude,$commande->zoneprecise);
+                        # Push au client
+                        // sendPush($client->tokenFCM,'Commande','Paiement effectué votre commande a été validée vous serez livrer dans quelques mineutes','','DELIVERING');
+                        # Email à l'administrateur
+                        $etting = getSettingIn();
+                        $msgG = "Infos Commande :
+								- Nom:".$payment->client_name."
+								- Phone :".$payment->client_phone."
+								- N°de commande :".$commande->numcomd." 
+								- Montant :".$commande->montant."
+								- Date Commande :".date('d-m-Y');
+                        try {
+                         SendEmail($etting->email,'Nouvelle commande Didou',$msgG);
+                        } catch (\Throwable $th) {
+                          echo $th->getMessage();
+                        }  
+                        # Créditer le solde du compte ambassadeur
+                        return $commande->ambassadeur_code;
+                        if ($commande->ambassadeur_code!='aucun') 
+                        {
+                            creditersoldAmbasad($commande->ambassadeur_code);
+                            #Push à l'ambassadeur
+                            $ambassadeur = getAmb($commande->ambassadeur_code);
+                            sendPush($ambassadeur->tokenFCM,'Ambassadeur','cher ambassadeur votre solde a été crédité','','AMBASSADOR_ACTION');
+                        }
+                    }
+                    if ($payment->type_paiement=='credit') {
+                        $payment = getTransPay($id_transaction);
+                        $credit = $payment->description;
+                        # Mise à jour du status remboursement en succès
+                        rembourserCreditUser($credit);
+                        #Push au client
+                        sendPush($client->tokenFCM,'Crédit Didou','remboursement du crédit effectué avec succès','','CREDIT_DIDOU');
+                    }
                     
                 }
+              }else{
+                 #Changer le statut de paiement :: en 1 pour paiement succès
+                 $payment = getTransPay($id_transaction);
+                 $user    = $payment->user_id;
+                 $client = getSingleClientsUser($user);
+                 updatePayState($id_transaction);
+                 # Enregistrement de la commande
+                 $commande = getTransComd($id_transaction);
+                 
+                 if ($payment->type_paiement=='commande') {
+                    //  return $commande;
+                     saveCommand($commande->clientid,$commande->ambassadeur_code,$commande->credit_didou,$commande->montant,$commande->montantpay,$commande->qte,$commande->zoneid,$commande->dateComd,$commande->statutClient,$commande->numcomd,$commande->longitude,$commande->largitude,$commande->zoneprecise);
+                     # Push au client
+                     sendPush($client->tokenFCM,'Commande','Paiement effectué votre commande a été validée vous serez livrer dans quelques mineutes','','DELIVERING');
+                     # Email à l'administrateur
+                     $etting = getSettingIn();
+                     $msgG = "Infos Commande :
+                             - Nom:".$payment->client_name."
+                             - Phone :".$payment->client_phone."
+                             - N°de commande :".$commande->numcomd." 
+                             - Montant :".$commande->montant."
+                             - Date Commande :".date('d-m-Y');
+                     try {
+                      SendEmail($etting->email,'Nouvelle commande Didou',$msgG);
+                     } catch (\Throwable $th) {
+                       echo $th->getMessage();
+                     }  
+                     # Créditer le solde du compte ambassadeur
+                     if ($commande->ambassadeur_code!='aucun') 
+                     {
+                         creditersoldAmbasad($commande->ambassadeur_code);
+                         #Push à l'ambassadeur
+                         $ambassadeur = getAmb($commande->ambassadeur_code);
+                         sendPush($ambassadeur->tokenFCM,'Didou ambassadeur','cher ambassadeur votre solde a été crédité','','AMBASSADOR_ACTION');
+                     }
+                 }
+                 if ($payment->type_paiement=='credit') {
+                     $payment = getTransPay($id_transaction);
+                     $credit = $payment->description;
+                     # Mise à jour du status remboursement en succès
+                     rembourserCreditUser($credit);
+                     #Push au client
+                     sendPush($client->tokenFCM,'Crédit Didou','remboursement du crédit effectué avec succès','','CREDIT_DIDOU');
+                 }
+              }
             }
        }
-
-       //return
-       function return_pay()
+       //returnpay :: PAY IN
+       function return_pay(Request $request)
        {
+          $id_transaction = $request->transaction_id;
+        
+          #Verification du paiement
+          $payment = getTransPay($id_transaction);
+         
+          if ($payment->type_paiement=='credit') {
+            $msg = "paiement effectué avec succès, remboursement de crédit validé";
+          }
+          if ($payment->type_paiement=='commande') {
+            $msg = "paiement effectué avec succès, commande validée";
+          }
+          if ($payment->state==1) {
+            return response()->json(['statusCode'=>'200',
+                                     'status'=>true,
+                                     'message'=> $msg,
+                                     'data'=> '',
+                                     'error'=> '',
+                                    ],200);
+          }else{
+           
+              if ($payment->type_paiement=='credit') {
+                $msg = "paiement echoué, crédit non remboursé";
+              }
+              if ($payment->type_paiement=='commande') {
+                $msg = "paiement echoué, commande non validée";
+                $commande = getTransComd($id_transaction);
+                if($commande) {
+                    //Suppression des dépendances de la commande
+                      #suppression des plats de la commande :: panier
+                      deletepanier($commande->numcomd);
+                      #suppression des supplement :: panier_supplements
+                      deletesup($commande->numcomd);
+                      #suppression de la commande
+                      deletecomd($commande->numcomd);
+                }
+               
+              }
+              return response()->json(['statusCode'=>'404',
+                                       'status'=>false,
+                                       'message'=>$msg,
+                                       'data'=> '',
+                                       'error'=> '',
+                                    ],404);
+          }
 
        }
+    
     
 }

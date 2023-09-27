@@ -32,6 +32,7 @@ class LivreurController extends Controller
                 'message' => $th->getMessage()
             ], 500);
          }
+      
       }
 
       //Get livreur commande by status
@@ -54,13 +55,29 @@ class LivreurController extends Controller
          }
       }
 
+      //Get livreur commande today by status
+      function get_livreur_today_command_status(Request $request)
+      {
+        try {
+            $user = Auth::user();
+            $livreur = getLivreurID($user->id);
+            return  get_livreur_today_command_status($livreur->idlivreur,date('d/m/Y'),$request->status);
+         } catch (\Throwable $th) {
+            //throw $th;
+            return response()->json([
+                'statusCode'=>500,
+                'status' => false,
+                'message' => $th->getMessage()
+            ], 500);
+         }
+      }
+
       //Get livreur commande today
       function  get_livreur_today_command(Request $request)
       {
         try {
             $user = Auth::user();
             $livreur = getLivreurID($user->id);
-           
             return  get_livreur_today_command($livreur->idlivreur,date('d/m/Y'));
          } catch (\Throwable $th) {
             //throw $th;
@@ -83,7 +100,7 @@ class LivreurController extends Controller
             ]);
             if ($validate_livreur->fails()) 
             {
-                return response()->json(['statusCode'=>'401',
+                return response()->json(['statusCode'=>'404',
                                          'status'=>'false',
                                          'message'=>'Erreur de validation',
                                          'data'=> '',
@@ -127,7 +144,7 @@ class LivreurController extends Controller
             ]);
             if ($validateClient->fails()) 
             {
-                    return response()->json(['statusCode'=>'401',
+                    return response()->json(['statusCode'=>'404',
                                             'status'=>'false',
                                             'message'=>'Erreur de validation',
                                             'data'=> '',
@@ -162,6 +179,7 @@ class LivreurController extends Controller
             ], 500);
         }
       }
+      
       //Connection livreur
       function login_livreur(Request $request)
       {
@@ -173,7 +191,7 @@ class LivreurController extends Controller
             ]);
             if ($valideClient->fails()) 
             {
-                    return response()->json(['statusCode'=>'401',
+                    return response()->json(['statusCode'=>'404',
                                              'status'=>'false',
                                              'message'=>'Erreur de validation',
                                              'data'=> '',
@@ -184,19 +202,27 @@ class LivreurController extends Controller
             if (!Auth::attempt($request->only(['tel','password']))) 
             {
                     return response()->json([
-                        'statusCode'=>401,
+                        'statusCode'=>404,
                         'status' => false,
                         'message' => "Le numéro et le mot de passe ne correspondent pas à nos enregistrement",
-                    ], 401);
+                    ], 404);
             }
 
             $user = User::where('tel', $request->tel)->first();
-           
+            $livreur = getLivreurInfo($user->id);
+            #Generer FCM Token
+            if ($request->tokenFCM)
+            {
+                #Mise à jour du token
+                updateTokenFCM($livreur->idlivreur,$request->tokenFCM);
+            }
             return response()->json([
                                      'statusCode'=>200,
-                                     'status' => true,
+                                     'status'  => true,
                                      'message' => "connecté avec succès",
-                                     'token' => $user->createToken("API TOKEN")->plainTextToken,
+                                     'data'    => $user,
+                                     'livreur' => $livreur,
+                                     'token'   => $user->createToken("API TOKEN")->plainTextToken,
                                     ], 200);
 
         } catch (\Throwable $th) {
@@ -213,7 +239,7 @@ class LivreurController extends Controller
       {
        
         $user = Auth::user();
-        $livreur = getSingleLivreur($user->id);
+        $livreur = getLivreurInfo($user->id);
         return response()->json(['statusCode'=>'200',
                                  'status'=>'true',
                                  'message'=>"profil du livreur connecté",
@@ -227,22 +253,6 @@ class LivreurController extends Controller
       function update_livreur_info(Request $request)
       {
        
-        //Validated
-        $validateLivreur = Validator::make($request->all(),[
-          'email' => 'email|unique:users',
-          'tel' => 'min:10|max:10|unique:users',
-        ]);
-        if ($validateLivreur->fails()) 
-        {
-                return response()->json(['statusCode'=>'401',
-                                        'status'=>'false',
-                                        'message'=>'Erreur de validation',
-                                        'data'=> '',
-                                        'error'=> $validateLivreur->errors(),
-                                        ]);
-        }
-
-         $password = Hash::make($request->password);
          $user = Auth::user();
 
          if ($request->name!='') {
@@ -250,20 +260,47 @@ class LivreurController extends Controller
                      ->update(['name' => $request->name]);
          }
 
-         if ($request->email!='') {
-            User::where('id', $user->id)
-                 ->update(['email' => $request->email]);
-         }
+        //  if ($request->email!='') {
+        //     //Validated
+        //     $validateLivreur = Validator::make($request->all(),[
+        //       'email' => 'email|unique:users',
+        //     ]);
+        //     if($validateLivreur->fails()) 
+        //     {
+        //             return response()->json(['statusCode'=>'404',
+        //                                      'status'=>'false',
+        //                                      'message'=>'Erreur de validation',
+        //                                      'data'=> '',
+        //                                      'error'=> $validateLivreur->errors(),
+        //                                     ]);
+        //     }
+        //     User::where('id', $user->id)
+        //          ->update(['email' => $request->email]);
+        //  }
 
-         if ($request->tel!='') {
-            User::where('id', $user->id)
-                 ->update(['tel' => $request->tel]);
-         }
+        //  if ($request->tel!='') {
+           
+        //     Validated
+        //     $validateLivreur = Validator::make($request->all(),[
+        //         'tel' => 'required|min:10|max:10|unique:users'
+        //     ]);
 
-         if ($request->password!='') {
-            User::where('id', $user->id)
-                 ->update(['password' => $password]);
-         }
+        //     if($validateLivreur->fails()) 
+        //     {
+        //             return response()->json(['statusCode'=>'404',
+        //                                      'status'=>'false',
+        //                                      'message'=>'Erreur de validation',
+        //                                      'data'=> '',
+        //                                      'error'=> $validateLivreur->errors(),
+        //                                     ]);
+        //     }
+
+        //     User::where('id', $user->id)
+        //         ->update(['tel' => $request->tel]);
+        //  }
+
+        
+
 
          if ($request->file('photo')!='') {
             //Traitement des fichiers
@@ -276,6 +313,20 @@ class LivreurController extends Controller
                      ->update(['photo' => $photo]);
          }
 
+         if ($request->local!='') {
+            $local = $request->local;
+            Livreur::where('id_user',$user->id)
+                   ->update(['local' => $request->local]);
+         }
+
+         $livreur = getLivreurInfo($user->id);
+         $user = User::where('id', $user->id)->first();
+         return response()->json(['statusCode'=>'200',
+                                 'status'  =>'true',
+                                 'data'    => $user,
+                                 'livreur' => $livreur,
+                                 'message' =>'Modification effectuée avec succès',
+                                ]);
 
 
 
@@ -297,7 +348,7 @@ class LivreurController extends Controller
             ]);
             if ($validate_livreur->fails()) 
             {
-                return response()->json(['statusCode'=>'401',
+                return response()->json(['statusCode'=>'404',
                                          'status'=>'false',
                                          'message'=>'Erreur de validation',
                                          'data'=> '',
@@ -306,7 +357,66 @@ class LivreurController extends Controller
             }
             $user = Auth::user();
             $livreur = getLivreurID($user->id);
-            return  debiter_solde_livreur($livreur->idlivreur,$request->montant);
+            #Préparation du Guichet de paiement
+            $transfert_id = date("YmdHis");
+            $phone = $user->tel;
+            $name  = $user->name;
+            $email = $user->email ?? support();
+            $type = 'livreur';
+            $profil_id = $livreur->idlivreur;
+            $montant = $request->montant;
+            $payment_method = $request->payment_method;
+            #Lancement du Guichet de paiement
+            if ($livreur->solde > $montant ) {
+                $res = GuichetPayOut($transfert_id,$phone,$montant,$name,$email,$type,$payment_method,$profil_id);
+               if ($res->code==0) {
+                    return response()->json(['statusCode'=>200,
+                                            'status'=>true,
+                                            'message'=>"Paiement effectué avec succès",
+                                            'data'=> '',
+                                            'error'=> '',
+                                        ],200);
+               }
+               if ($res->code==-1) {
+                return response()->json(['statusCode'=>400,
+                                        'status'=>false,
+                                        'message'=>"Paiement refusé, veuillez ressayer plutard",
+                                        'data'=> '',
+                                        'error'=> '',
+                                    ],400);
+               }
+               if ($res->code==602) {
+                return response()->json(['statusCode'=>400,
+                                         'status'=>false,
+                                         'message'=>"Paiement non actif pour le moment",
+                                         'data'=> '',
+                                         'error'=> '',
+                                        ],400);
+               }
+               if ($res->code==804) {
+                return response()->json(['statusCode'=>400,
+                                         'status'=>false,
+                                         'message'=>"Transaction echoué, le moyen de paiement choisi est indisponible",
+                                         'data'=> '',
+                                         'error'=> '',
+                                        ],400);
+               }
+               return response()->json(['statusCode'=>400,
+                                        'status'=>false,
+                                        'message'=>"Une erreur s'est produite, veuillez ressayer plutard",
+                                        'data'=> '',
+                                        'error'=> '',
+                                    ],400);
+            }else{
+               
+                return response()->json(['statusCode'=>404,
+                                        'status'=>false,
+                                        'message'=>"Votre solde est insuffisant",
+                                        'data'=> '',
+                                        'error'=> '',
+                                      ],404);
+            }
+            
         } catch (\Throwable $th) {
             //throw $th;
             return response()->json([

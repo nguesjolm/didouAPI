@@ -7,6 +7,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Http;
+use Kutia\Larafirebase\Facades\Larafirebase;
+
 
 class AdminController extends Controller
 {
@@ -85,14 +88,19 @@ class AdminController extends Controller
           {
                 //Get inputs
                 $nom = $request->nom; 
+                $prix = $request->prix; 
                 $file = $request->file('image');
                 $lien  = env('LIEN_FILE');
-                if ($nom!='' &&  $file!='') {
+                if ($nom!='') {
                     //Traitement des images
-                    $path = $file->store('supplements','public');
-                    $supplementimage = $lien.$path;
+                    $supplementimage ='';
+                    if($file){
+                        $path = $file->store('supplements','public');
+                        $supplementimage = $lien.$path;
+                    }
+                   
                     //save
-                    return CreateSupplement($nom,$supplementimage,0);
+                    return CreateSupplement($nom,$prix,$supplementimage);
                 }else{
                     return response()->json(['statusCode'=>'400',
                                             'status'=>'false',
@@ -143,6 +151,66 @@ class AdminController extends Controller
             return getsingleSupplement($supl);
              
           }
+          //Supprimer un supplement
+          function deleteSupplement(Request $request)
+          {
+             try {
+                //code...
+                $supplementID = $request->id;
+                $res = DeleteSupplementID($supplementID);
+                if ($res!=0) {
+                    return response()->json([
+                        'statuscode' =>200,
+                        'status'     => true,
+                        'message'    => 'supplement supprimé avec succès'
+                     ],200);
+                }else{
+                    return response()->json([
+                        'statuscode' => 404,
+                        'status'     => false,
+                        'message'    => "Ce supplement n'existe pas"
+                     ],404);
+                }
+               
+             } catch (\Throwable $th) {
+                //throw $th;
+                return response()->json([
+                    'statuscode'=>500,
+                    'status' => false,
+                    'message' => $th->getMessage()
+                ], 500);
+             }
+          }
+          //Changer le state d'un supplement
+          function changeSupplementState(Request $request)
+          {
+            try {
+                //code...
+                $supplementID = $request->id;
+                $state        = $request->state;
+                $res = ChangeSupplementState($supplementID,$state);
+                if ($res!=0) {
+                    return response()->json([
+                        'statuscode' =>200,
+                        'status'     => true,
+                        'message'    => 'Mise à jour du statut effectué avec succès'
+                     ],200);
+                }else{
+                    return response()->json([
+                        'statuscode' => 404,
+                        'status'     => false,
+                        'message'    => "Le supplement a déjà cette valeur"
+                     ],404);
+                }
+            } catch (\Throwable $th) {
+                //throw $th;
+                return response()->json([
+                    'statuscode'=>500,
+                    'status' => false,
+                    'message' => $th->getMessage()
+                ], 500);
+            }
+          }
 
     
         
@@ -157,7 +225,7 @@ class AdminController extends Controller
                 //Validate
                 $validateCatg = Validator::make($request->all(),[
                     'nomcatg' => 'required|min:4|unique:categorie,nomcateg',
-                    'photo' => 'required|mimes:jpeg,jpg,png|max:100000',
+                    'photo' => 'required|image|mimes:jpeg,jpg,png|max:100000',
                 ]);
                 if ($validateCatg->fails())
                 {
@@ -181,7 +249,17 @@ class AdminController extends Controller
             //Get categories All
             function getAllCatg()
             {
+              try {
                 return getAllCatg();   
+              } catch (\Throwable $th) {
+                //throw $th;
+                return response()->json([
+                    'statuscode'=>500,
+                    'status' => false,
+                    'message' => $th->getMessage()
+                ], 500);
+              }
+              
             }
 
             //Search categorie
@@ -224,6 +302,37 @@ class AdminController extends Controller
                $idcatg = $request->idcatg;
                return deleteCatg($idcatg);
             }
+            //Changer le status d'une categorie
+            function ChangeStat(Request $request)
+            {
+                try {
+                    //code...
+                    $status = $request->active;
+                    $idcatg = $request->idcatg;
+                    $res = changeState($idcatg,$status);
+                    if ($res!=0) {
+                        return response()->json([
+                            'statuscode' =>200,
+                            'status'     => true,
+                            'message'    => 'Mise à jour du status de la categorie effectué avec succès'
+                         ],200);
+                    }else{
+                        return response()->json([
+                            'statuscode' =>404,
+                            'status'     => false,
+                            'message'    => "Déjà mise à jour"
+                         ],404);
+                    }
+                    
+                } catch (\Throwable $th) {
+                    //throw $th;
+                    return response()->json([
+                        'statusCode'=>500,
+                        'status' => false,
+                        'message' => $th->getMessage()
+                    ], 500);
+                }
+            }
         
 
 
@@ -231,62 +340,126 @@ class AdminController extends Controller
         /*----------------
          GESTION RECETTES
         ----------------*/
-           
+            //Suppression de catégorie
+            function deletegalerie(Request $request)
+            {
+               $galerie = $request->id_galerie;
+              
+               try {
+                 deletGalerie($galerie);
+                 return response()->json(['statusCode'=>200,
+                                          'status' => true,
+                                          'message' => "Suppression de galerie effectué avec succès"
+                                        ], 500);
+
+               } catch (\Throwable $th) {
+                //throw $th;
+                return response()->json([
+                    'statusCode'=>500,
+                    'status' => false,
+                    'message' => $th->getMessage()
+                ], 500);
+               }
+              
+            }
+            //get recette by recommanded state
+            function getRecetteRecomd(Request $request)
+            {
+               try {
+                //code...
+                return getRecetteRecomd($request->state);
+               } catch (\Throwable $th) {
+                //throw $th;
+               }   
+            }
+            //get recette by pub state
+            function getRecettePub(Request $request)
+            {
+                try {
+                    //code...
+                    return  getRecetteStat($request->state);
+                } catch (\Throwable $th) {
+                    //throw $th;
+                    return response()->json([
+                        'statuscode'=>500,
+                        'status' => false,
+                        'message' => $th->getMessage()
+                    ], 500);
+                }
+            }
             //Create recette
             function createRecette(Request $request)
             {
+              try {
              
-              //Contrôle des champs
-              $validated = Validator::make($request->all(),[
-                'nomrecette' => 'required|min:4|unique:plats',
-                'image' => 'required|mimes:jpeg,jpg,png|max:100000',
-                'galerie' => 'required|mimes:jpeg,jpg,png|max:100000',
-                'description' => 'required|min:4',
-                'categorie' => 'required',
-                'prix' => 'required',
-              ]);
-              if ($validated->fails()) 
-              {
-                return response()->json(['statusCode'=>'401',
-                                        'status'=>'false',
-                                        'message'=>'Erreur de validation',
-                                        'data'=> '',
-                                        'error'=> $validated->errors(),
-                                    ]);
-              }
+                //Contrôle des champs
+                $validated = Validator::make($request->all(),[
+                    'nomrecette' => 'required|min:4',
+                    'photo' => 'mimes:jpeg,jpg,png|max:100000',
+                    // 'galerie' => 'required|mimes:jpeg,jpg,png|max:100000 |unique:plats',
+                    'description' => 'required|min:4',
+                    'categorie' => 'required',
+                    'prix' => 'required',
+                ]);
+                if ($validated->fails()) 
+                {
+                    return response()->json(['statusCode'=>'401',
+                                            'status'=>'false',
+                                            'message'=>'Erreur de validation',
+                                            'data'=> '',
+                                            'error'=> $validated->errors(),
+                                        ]);
+                }
 
-              //Get data
-              $lien  = env('LIEN_FILE');
-              $nomrecette = $request->nomrecette; 
-              $description = $request->description;     
-              $categorie = $request->categorie; 
-              $recommand = $request->recommanded; 
-              $prix = $request->prix; 
-              $image = $request->file('image');    
+                //Get data
+                $lien  = env('LIEN_FILE');
+                $nomrecette = $request->nomrecette; 
+                $description = $request->description;     
+                $categorie = $request->categorie; 
+                $recommand = $request->recommanded; 
+                $prix = $request->prix; 
+                $stock = $request->stock; 
+                $photo = ''; 
+                //Photo principale
+                if($request->file('photo'))
+                {
+                    $photo_1 = $request->file('photo');
+                    $path = $photo_1->store('recettes','public');
+                    $photo = $lien.$path;
+                }
+                $res = createRecette($nomrecette,$description,$photo,$prix,$categorie,$recommand,$stock);
+               
+                //Galerie de recettes
+                if ($request->file('galerie')) 
+                {
 
-              //Traitement
-              $fileImage = "";
-              if ($image!='') {
-                 $path = $image->store('recettes','public');
-                 $fileImage = $lien.$path;
-              } 
-              $recetteId =  createRecette($nomrecette,$description,$fileImage,$prix,$categorie,$recommand);
-           
-               //save galerie
-               recetteGalerie($recetteId,$request->file('galerie'));
-               /*foreach ($request->file('galerie') as $key => $file)
-               {
-                 $path = $file->store('galeries','public');
-                 $fileGalerie = $lien.$path;
-                 recetteGalerie($recetteId,$fileGalerie);
-               }*/
-               //save suppléments
-               recetteSupplement($recetteId,$request->supplement);
+                    // $photo_g = $request->file('galerie');
+                    // $path = $photo_g->store('galerie','public');
+                    // $photo_f = $lien.$path;
+                    // recetteGalerie($res,$photo_f);
 
-               /*foreach ($request->supplement as $value) 
-               {
-                 recetteSupplement($recetteId,$value);
-               }*/
+                    foreach ($request->file('galerie') as $key => $file) {
+                        $photo_g = $file;
+                        $path = $photo_g->store('galerie','public');
+                        $photo_f = $lien.$path;
+                        recetteGalerie($res,$photo_f);
+                    }
+                }
+
+                //Supplement de recettes
+                if ($request->supplement) {
+                    $jsonString = $request->supplement;
+                    $array = json_decode($jsonString);
+                    
+                    foreach ($array as $value) {
+                        // Faites ce que vous voulez avec chaque élément ($value)
+                        // Par exemple, vous pouvez l'afficher ou effectuer un traitement spécifique.
+                        recetteSupplement($res,$value);
+                    }
+                   
+                } 
+             
+
                return response()->json(['statusCode'=>'200',
                                         'status'=>'true',
                                         'message'=>"Nouvelle recette ajoutée avec succès",
@@ -294,13 +467,26 @@ class AdminController extends Controller
                                         'error'=> '',
                                      ]);
               
-              
+              //code...
+              } catch (\Throwable $th) {
+                    //throw $th;
+                    return response()->json([
+                        'statusCode'=>500,
+                        'status' => false,
+                        'message' => $th->getMessage()
+                    ], 500);
+              }
              
             }
             //Get all recette
             function getAllRecette()
             {
                return getAllRecette();
+            }
+            //Get recette recommandées
+            function getRecommandRecette(Request $request)
+            {
+                
             }
             //Get single recette
             function getSingleRecette(Request $request)
@@ -320,35 +506,40 @@ class AdminController extends Controller
                 $disponible     = $request->disponible;
                 $prix           = $request->prix;
                 $recetteid      = $request->recetteid;
+                $stock          = $request->stock;
                 //Traitement image
                 $imageFile  = "";
-                $image = $request->file('image');
-                if ($image!='') {
+                if ($request->file('image')) {
+                    $image = $request->file('image');
                     $path = $image->store('recettes','public');
                     $imageFile = $lien.$path;
                 }
-                updateRecette($nomrecette,$description,$categorie,$recommanded,$disponible,$prix,$imageFile,$recetteid);
-
+                $res = updateRecette($nomrecette,$description,$categorie,$recommanded,$disponible,$stock,$prix,$imageFile,$recetteid);
+             
                 //Get recette galerie data
-                if ($request->file('galerie')!='') {
-                    updateRecetteGalerie($recetteid,$request->file('galerie'));
-                    /*foreach ($request->file('galerie') as $key => $file)
+                if ($request->file('galerie')) {
+                    foreach ($request->file('galerie') as $key => $file)
                     {
                          $path = $file->store('galeries','public');
                          $fileGalerie = $lien.$path;
+                        //  dd($fileGalerie);
                          updateRecetteGalerie($recetteid,$fileGalerie);
-                    }*/
+                    }
                 }
                
                 //Get recette supplement data
-                if ($request->supplement!='') {
-                    updateRecetteSupplement($recetteid,$request->supplement);
-                   /* foreach ($request->supplement as $value) 
-                    {
-                        updateRecetteSupplement($recetteid,$value);
-                    }*/
+                if ($request->supplement) {
+                    deleteRecetteID($recetteid);
+                    $jsonString = $request->supplement;
+                    $array = json_decode($jsonString);
+                    // return $array;
+                    foreach ($array as $value) {
+                        // Faites ce que vous voulez avec chaque élément ($value)
+                        // Par exemple, vous pouvez l'afficher ou effectuer un traitement spécifique.
+                        recetteSupplement($recetteid,$value);
+                    }
                 }
-
+              
                 return response()->json(['statusCode'=>'200',
                                         'status'=>'true',
                                         'message'=>"Mise à jour effectuée avec succès",
@@ -363,6 +554,30 @@ class AdminController extends Controller
             {
                 $recetteid  = $request->recetteid;
                 return deleteRecette($recetteid);
+            }
+
+            //Changer le statut de la recette
+            function changeStateRecette(Request $request)
+            {
+                try {
+                    $recetteId = $request->recetteid;
+                    $state = $request->state_value;
+                    changeStateRecette($recetteId,$state);
+                    return response()->json(['statusCode'=>'200',
+                                        'status'=>'true',
+                                        'message'=>"Effectuée avec succès",
+                                        'data'=> '',
+                                        'error'=> '',
+                                      ]);
+
+                } catch (\Throwable $th) {
+                    //throw $th;
+                    return response()->json([
+                        'statuscode'=>500,
+                        'status' => false,
+                        'message' => $th->getMessage()
+                    ], 500);
+                }
             }
 
         /*----------------
@@ -422,7 +637,9 @@ class AdminController extends Controller
                 $gainambassadeur = $request->gainambassadeur;
                 $promoComd = $request->promoComd;
                 $creditDidou = $request->creditDidou;
-                return settingDidou($gainlivreur,$gainambassadeur,$promoComd,$creditDidou);
+                $conditionCredit = $request->conditionCredit;
+                $commandeAffilier = $request->commandeAffilier;
+                return settingDidou($gainlivreur,$gainambassadeur,$promoComd,$creditDidou,$conditionCredit,$commandeAffilier);
             }
             //recuperer les paramètres didou
             function getsetting()
@@ -440,7 +657,8 @@ class AdminController extends Controller
                $tel = $request->tel;
                $email = $request->email;
                $local = $request->local;
-               return createLivreur($nom,$tel,$email,$local);
+               $password = rand (5, 15)."LD";
+               return createLivreur($nom,$tel,$email,$local,$password);
             }
             //Get all livreurs
             function getAllLivreur()
@@ -456,21 +674,46 @@ class AdminController extends Controller
             //Update livreurs
             function updatlivreur(Request $request)
             {
+                
+                //Validate data
+               if($request->tel)
+               {
+                    $validateTelLivreur = Validator::make($request->all(),[
+                        'tel' => 'unique:users'
+                    ]);
+                    if($validateTelLivreur->fails()) 
+                    {
+                            return response()->json(['statusCode'=>'402',
+                                                    'status'=>'false',
+                                                    'message'=>'Tel existe déjà',
+                                                    'data'=> '',
+                                                    'error'=> $validateTelLivreur->errors(),
+                                                    ]);
+                    }
+               }
+    
+                if ($request->email) {
+                    $validateEmailLivreur = Validator::make($request->all(),[
+                        'email' => 'unique:users'
+                    ]);
+                    if($validateEmailLivreur->fails()) 
+                    {
+                            return response()->json(['statusCode'=>'402',
+                                                     'status'=>'false',
+                                                     'message'=>'email existe déjà',
+                                                     'data'=> '',
+                                                     'error'=> $validateEmailLivreur->errors(),
+                                                    ]);
+                    }
+                }
                $nom = $request->nom;
                $tel = $request->tel;
                $email = $request->email;
                $local = $request->local;
                $id = $request->id;
                $status = $request->status;
-               $photo = "";
-               //Traitemenet image
-                $file = $request->file('photo');
-                $lien = env('LIEN_FILE');
-                if ($file!='') {
-                 $path = $file->store('categories','public');
-                 $photo = $lien.$path;
-                }
-               return updatlivreur($nom,$tel,$email,$local,$status, $photo,$id); 
+             
+               return updatlivreur($nom,$tel,$email,$local,$status,$id); 
             }
             //Delete livreurs
             function deleteLivreur(Request $request)
@@ -524,10 +767,10 @@ class AdminController extends Controller
 
                 //Etape 2 : Enregistrer chaque produit
                 $data = $request->data;
-                foreach ($data as $key => $value) 
-                {
-                    savecomprod($value['platId'],$value['qte'],$value['amount'],$numComd,$clientid);
-                }
+                // foreach ($data as $key => $value) 
+                // {
+                //     savecomprod($value['platId'],$value['qte'],$value['amount'],$numComd,$clientid);
+                // }
                 //Retour
                 return response()->json(['statusCode'=>'200',
                                          'status'=>'true',
@@ -595,6 +838,57 @@ class AdminController extends Controller
 
             }
 
+            //Give commande to livreur
+            function giveOrderToLivreur(Request $request)
+            {
+                
+                try {
+                        //validated
+                        $valideClient = Validator::make($request->all(),[
+                            'idcommandes' => 'required',
+                            'idlivreur'   => 'required',
+                        ]);
+                        if ($valideClient->fails()) 
+                        {
+                                return response()->json(['statusCode'=>'401',
+                                                        'status'=>'false',
+                                                        'message'=>'Erreur de validation',
+                                                        'data'=> '',
+                                                        'error'=> $valideClient->errors(),
+                                                        ]);
+                        }
+                    giveOrderToLivreur($request->idcommandes,$request->idlivreur);
+                    return response()->json([
+                        'statusCode'=>200,
+                        'status' => true,
+                        'message' => "commande affecté avec succès"
+                       ], 200);
+                } catch (\Throwable $th) {
+                    return response()->json([
+                        'statusCode'=>500,
+                        'status' => false,
+                        'message' => $th->getMessage()
+                    ], 500);
+                }
+            }
+
+            //Get order by state
+            function getOrderState(Request $request)
+            {
+                try {
+                    //code...
+                    $state = $request->state;
+                    return  getallorderState($state);
+                } catch (\Throwable $th) {
+                    //throw $th;
+                    return response()->json([
+                        'statuscode'=>500,
+                        'status' => false,
+                        'message' => $th->getMessage()
+                    ], 500);
+                }
+            }
+
 
         
         /* -------------------------
@@ -651,8 +945,8 @@ class AdminController extends Controller
             //Get single ambassadeurs
             function getsinglambassad(Request $request)
             {
-               $ambassad = $request->ambasdid;
-               return getSinglambassad($ambassad);
+               $client = $request->clientID;
+               return getSinglambassad($client);
             }
             //Créditer solde ambassadeur
             function creditersoldAmbasad(Request $request)
@@ -682,23 +976,64 @@ class AdminController extends Controller
         /* ------------------------
             GESTION DES CAMPAGNES PUSH
         -------------------------- */
+            //Générer OTP
+            function generateAdminOTP(Request $request)
+            {
+
+            }
             //Create push
             function creatpush(Request $request)
             {
-                $pushMsg = $request->message;
-                $pushTitre = $request->titre;
-                $debut = $request->debut;
-                $fin = $request->fin;
-                $pushImg = '';
-                $file = $request->file('img');
-                $lien  = env('LIEN_FILE');
-                if ($file!='') 
-                {
-                    //Traitement d'image
-                    $path = $file->store('push','public');
-                    $pushImg = $lien.$path;
+             try{
+                  
+                    $pushMsg = $request->message;
+                    $pushTitre = $request->titre;
+                    $debut = $request->debut;
+                    $fin = $request->fin;
+                    $pushImg = '';
+                    $file = $request->file('img');
+        
+                 
+                    $lien  = env('LIEN_FILE');
+                    if ($file!='') 
+                    {
+                        //Traitement d'image
+                        $path = $file->store('push','public');
+                        $pushImg = $lien.$path;
+                    }
+                    //Envoie de la campagne
+                    $alltokenFCM = ClientToken();
+                    foreach ($alltokenFCM as $tokenFCM) {
+                        $token ='';
+                        //return $tokenFCM->tokenFCM;
+                        if ( $tokenFCM->tokenFCM) {
+                            // Http::post('https://exp.host/--/api/v2/push/send', [
+                            //     'to' =>  $tokenFCM->tokenFCM,
+                            //     'title' => $pushTitre,
+                            //     'body' => $pushMsg,
+                            //     'image' => env('APP_URL').$pushImg,
+                            //     'sound' => 'default',
+                            // ])->throw();
+                                  
+                            Larafirebase::withTitle($pushTitre)
+                                        ->withBody($pushMsg)
+                                        ->sendMessage($tokenFCM->tokenFCM);
+                            
+                         
+                        }
+                    }
+                    //Enregistrement de la campange
+                    creatpush($pushMsg,$pushImg,$pushTitre,$debut,$fin);
+                    return response()->json(['message' => 'Message envoyé', 'status' => true,'image'=>$request->file('img')]);
+                } catch (\Throwable $th) {
+                    //throw $th;
+                    return response()->json([
+                        'statuscode'=>500,
+                        'status' => false,
+                        'message' => $th->getMessage()
+                    ], 500);
                 }
-                return creatpush($pushMsg,$pushImg,$pushTitre,$debut,$fin);
+                   
             }
             //Get all push
             function getallpush()
@@ -709,6 +1044,26 @@ class AdminController extends Controller
            function searchPush(Request $request)
            {
               return searchPush($request->push);
+           }
+           //Supprimer une campagne push
+           function deletepush(Request $request)
+           {
+             
+             try {
+                $push_id = $request->id_push;
+                deletePush($push_id);
+                return response()->json(['statusCode'=>200,
+                                         'status' => true,
+                                         'message' => "Campagne push supprimée avec succès",
+                                        ], 200);
+             } catch (\Throwable $th) {
+                //throw $th;
+                return response()->json([
+                    'statusCode'=>500,
+                    'status' => false,
+                    'message' => $th->getMessage()
+                ], 500);
+             }
            }
 
 
@@ -748,7 +1103,8 @@ class AdminController extends Controller
                                             'email' => $request->email,
                                             'password' => Hash::make($request->password)
                                         ]);
-
+                    $msg = 'Votre mot de passe est: '.$request->password;
+                    SendEmail($request->email,'COMPTE UTILISATEUR',$msg);
                     return response()->json([
                                              'statusCode'=>200,
                                              'status' => true,
@@ -785,10 +1141,25 @@ class AdminController extends Controller
             //Update user
             function updatuser(Request $request)
             {
+                //Validate data
+                if ($request->email!='') {
+                    $validateUser = Validator::make($request->all(),[
+                        'email' => 'email'
+                    ]);
+                    if ($validateUser->fails()) 
+                    {
+                        return response()->json(['statusCode'=>'401',
+                                                'status'=>'false',
+                                                'message'=>'email incorrecte ou cet email existe déjà',
+                                                'data'=> '',
+                                                'error'=> $validateUser->errors(),
+                                                ]);
+                    }
+                }
                 $nom =  $request->nom;
                 $email =  $request->email;
-                $pass =  Hash::make($request->pass);
                 $userid =  $request->userid;
+                $pass =  Hash::make($request->password);
                 return updatuser($nom,$email,$pass,$userid);
             }
             //Delete single user
@@ -877,7 +1248,9 @@ class AdminController extends Controller
           function creatzone(Request $request)
           {
             $zone =  $request->zone;
-            return creatzone($zone);
+            $long =  $request->longitude;
+            $larg =  $request->largitude;
+            return creatzone($zone,$long,$larg);
           }
           //liste des zones
           function getallzone()
@@ -887,22 +1260,26 @@ class AdminController extends Controller
           //modifier une zone
           function updatezone(Request $request)
           {
-            $zone =  $request->zone;
+            $zone   =  $request->zone;
             $zoneid =  $request->zoneid;
-            return updatezone($zone,$zoneid);
+            $long   =  $request->longitude;
+            $larg   =  $request->largitude;
+
+            return updatezone($zone,$zoneid,$long,$larg);
           }
           //changer le status d'une zone
           function updstatuszone(Request $request)
           {
             $zoneid =  $request->zoneid;
             $status =  $request->status;
+            // dd($request);
             return updstatuszone($status,$zoneid);
           }
           //commande par zone
           function getOrderzone(Request $request)
           {
-            $zoneid =  $request->zoneid;
-            return getOrderzone($zoneid);
+           
+            return getOrderzone();
           }
         
         /* --------------------

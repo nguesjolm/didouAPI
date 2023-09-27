@@ -21,7 +21,8 @@ class Client extends Model
         'status',
         'parain',
         'iduser',
-        'datecreat'
+        'datecreat',
+        'tokenFCM'
     ];
 
     /**

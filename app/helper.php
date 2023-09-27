@@ -1,13 +1,22 @@
 <?php
 
 use Illuminate\Support\Facades\DB;
-use Illuminate\Http\Request;
 use Laravel\Sanctum\HasApiTokens;
+use App\Models\User;
+use Carbon\Carbon;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Hash;
+use GuzzleHttp\Client;
+use GuzzleHttp\Psr7\Request;
+use Kutia\Larafirebase\Facades\Larafirebase;
+
+
 
 /*----------------------
   INTEGRATION CINETPAY
 -----------------------*/
 use App\Cinetpay\Cinetpay;
+use App\Cinetpay\CinetPayService;
 
 /**
  *  ----------------------------
@@ -76,7 +85,7 @@ use App\Cinetpay\Cinetpay;
             //Total des recettes
             function RecetteTotal()
             {
-              $plattsAll = DB::table('plats')->where('statut_plat','=',"1")->get();
+              $plattsAll = DB::table('plats')->where('disponible','=',"1")->get();
               $nb = count($plattsAll);
               $data = ['orderTotal' => $nb];
               return response()->json(['statusCode'=>'200',
@@ -270,24 +279,38 @@ use App\Cinetpay\Cinetpay;
         /*--------------------
           GESTION SUPPLEMENT
         ----------------------*/
+          //Delete supplement
+          function DeleteSupplementID($id)
+          {
+            $res = DB::table('supplements')->where('idsupplements', '=', $id)->delete();
+            return $res;
+          }
+          //Update supplement state
+          function ChangeSupplementState($id,$state)
+          {
+            $res =  DB::table('supplements')->where('idsupplements','=',$id)
+                                            ->update(['status'=>$state]);
+            return $res;
+          }
           //Create supplement
-          function CreateSupplement($nom,$image,$status)
+          function CreateSupplement($nom,$prix,$photo)
           {
               //Data
               $data = ['nom'=>ucfirst($nom),
-                        'image'=>$image,
-                        'status'=>$status,
+                        'image'  =>$photo,
+                        'prix'   =>$prix,
+                        'status' =>'true',
                       ];
               //Check existing
-              $res = $res = DB::table('supplements')->where('nom','=',$nom)->first();
+              $res = DB::table('supplements')->where('nom','=',$nom)->first();
               //result
               if ($res) {
                   return response()->json(
                     ['statusCode'=>'422',
-                      'status'=>'false',
-                      'message'=>"ce supplément existe déjà",
-                      'data'=> '',
-                      'error'=> '',
+                     'status'=>'false',
+                     'message'=>"ce supplément existe déjà",
+                     'data'=> '',
+                     'error'=> '',
                     ]
                   );
               }
@@ -363,7 +386,7 @@ use App\Cinetpay\Cinetpay;
                 $data[] = [
                   'id'  => $sup->idsupplements,
                   'nom' => $sup->nom,
-                  'image' => $sup->image,
+                  'image' => env('APP_URL').$sup->image,
                   'status' => $sup->status
                 ];
               }
@@ -446,7 +469,7 @@ use App\Cinetpay\Cinetpay;
             {
                $dataGalerie[] = ['id'=> $galerie->id,
                                  'recettes'=> $galerie->recettes,
-                                 'images'=> $galerie->images
+                                 'images'=> env('APP_URL').$galerie->images
                                ];
             }
             return  $dataGalerie;
@@ -503,7 +526,8 @@ use App\Cinetpay\Cinetpay;
                     $data[] = [
                       'id'            => $catg->idcategorie,
                       'nomcateg'      => $catg->nomcateg,
-                      'photo'         => $catg->photo,
+                      'photo'         => env('APP_URL').$catg->photo,
+                      'active'        => $catg->active,
                       'created_at'    => $catg->created_at,
                       'updated_at'    => $catg->updated_at
                     ];
@@ -624,20 +648,115 @@ use App\Cinetpay\Cinetpay;
                                       ]);
             }
 
+            //Change status
+            function changeState($catg,$status)
+            {
+              $res = DB::table('categorie')
+                             ->where('idcategorie',$catg)
+                             ->update(['active' => $status]);
+              return $res;
+            }
+
         
 
 
         /*------------------
         GESTION DES RECETTES
         --------------------*/
+            //Get recette by recomanded state
+            function getRecetteRecomd($state)
+            {
+              $recetteall = DB::table('plats')->where('recommanded','=',$state)->get();
+              $nb = count($recetteall);
+              if ($nb!=0) 
+              {
+                $data  = [];
+                foreach ($recetteall as $recette) 
+                {
+                  $data[] = [
+                    'id'           => $recette->idplats,
+                    'nomrecette'   => $recette->nomrecette,
+                    'description'  => $recette->description,
+                    'image'        => env('APP_URL').$recette->image,
+                    'prix'         => $recette->prix,
+                    'stock'        => $recette->stock,
+                    'disponible'   => $recette->disponible,
+                    'recommanded'  => $recette->recommanded,
+                    'supplement'   => getRecetteSupplement($recette->idplats),
+                    'galerie'      => getRecetteGalerie($recette->idplats),
+                    'categorie'    => $recette->categorie_idcategorie,
+                  ];
+                }
+                return response()->json(['statusCode'=>'200',
+                                          'status'=>'true',
+                                          'message'=>'Liste des recettes',
+                                          'data'=> $data,
+                                          'error'=> '',
+                                        ]);
+              }
+              else
+              {
+                return response()->json(['statusCode'=>'404',
+                                          'status'=>'false',
+                                          'message'=>'Aucune recette trouvée',
+                                          'data'=> '',
+                                          'error'=> '',
+                                        ]);
+              }
+              
+            }
+
+            //Get recette by state
+            function getRecetteStat($state)
+            {
+              $recetteall = DB::table('plats')->where('disponible','=',$state)->get();
+              $nb = count($recetteall);
+              if ($nb!=0) 
+              {
+                $data  = [];
+                foreach ($recetteall as $recette) 
+                {
+                  $data[] = [
+                    'id'           => $recette->idplats,
+                    'nomrecette'   => $recette->nomrecette,
+                    'description'  => $recette->description,
+                    'image'        => env('APP_URL').$recette->image,
+                    'prix'         => $recette->prix,
+                    'stock'        => $recette->stock,
+                    'disponible'   => $recette->disponible,
+                    'recommanded'  => $recette->recommanded,
+                    'supplement'   => getRecetteSupplement($recette->idplats),
+                    'galerie'      => getRecetteGalerie($recette->idplats),
+                    'categorie'    => $recette->categorie_idcategorie,
+                  ];
+                }
+                return response()->json(['statusCode'=>'200',
+                                          'status'=>'true',
+                                          'message'=>'Liste des recettes',
+                                          'data'=> $data,
+                                          'error'=> '',
+                                        ]);
+              }
+              else
+              {
+                return response()->json(['statusCode'=>'404',
+                                          'status'=>'false',
+                                          'message'=>'Aucune recette trouvée',
+                                          'data'=> '',
+                                          'error'=> '',
+                                        ]);
+              }
+              
+            }
 
             //Create recette
-            function createRecette($nomrecette,$description,$image,$prix,$categorie,$recommanded)
+            function createRecette($nomrecette,$description,$image,$prix,$categorie,$recommanded,$stock)
             {
               $data = ['nomrecette'=>$nomrecette,
                        'description'=>$description,
                        'image'=>$image,
                        'prix'=>$prix,
+                       'stock'=>$stock,
                        'recommanded'=>$recommanded,
                        'disponible'=>true,
                        'categorie_idcategorie'=>$categorie,
@@ -689,8 +808,9 @@ use App\Cinetpay\Cinetpay;
                     'id'           => $recette->idplats,
                     'nomrecette'   => $recette->nomrecette,
                     'description'  => $recette->description,
-                    'image'        => $recette->image,
+                    'image'        => env('APP_URL').$recette->image,
                     'prix'         => $recette->prix,
+                    'stock'        => $recette->stock,
                     'disponible'   => $recette->disponible,
                     'recommanded'  => $recette->recommanded,
                     'supplement'   => getRecetteSupplement($recette->idplats),
@@ -716,7 +836,12 @@ use App\Cinetpay\Cinetpay;
               }
               
             }
-
+            //Get one recette in by id
+            function getplatbyID($id)
+            {
+               $recettedata = DB::table('plats')->where('idplats','=',$id)->first();
+               return $recettedata;
+            }
             //Get single recette
             function getSingleRecette($recetteid)
             {
@@ -727,7 +852,7 @@ use App\Cinetpay\Cinetpay;
                     'id'           => $recettedata->idplats,
                     'nomrecette'   => $recettedata->nomrecette,
                     'description'  => $recettedata->description,
-                    'image'        => $recettedata->image,
+                    'image'        => env('APP_URL').$recettedata->image,
                     'prix'         => $recettedata->prix,
                     'disponible'   => $recettedata->disponible,
                     'recommanded'  => $recettedata->recommanded,
@@ -776,8 +901,13 @@ use App\Cinetpay\Cinetpay;
             }
 
             //Update recette
-            function updateRecette($nomrecette,$description,$categorie,$recommanded,$disponible,$prix,$image,$recetteid)
+            function updateRecette($nomrecette,$description,$categorie,$recommanded,$disponible,$stock,$prix,$image,$recetteid)
             {
+              if ($stock!='') 
+              {
+                DB::table('plats')->where('idplats','=',$recetteid)
+                                  ->update(['stock'=>$stock]);
+              }
               if ($nomrecette!='') 
               {
                 DB::table('plats')->where('idplats','=',$recetteid)
@@ -839,25 +969,47 @@ use App\Cinetpay\Cinetpay;
             }
 
             //Update recette supplement
-            function updateRecetteSupplement($recetteid,$supplement)
+            function updateRecetteSupplement($id,$supplement)
             {
               if ($supplement!='') 
               {
-                DB::table('plats_supplements')->where('recettes','=',$recetteid)
+                DB::table('plats_supplements')->where('id','=',$id)
                                               ->update(['supplements'=>$supplement]);
               }
+            }
+
+            //Get supplement all recette
+            function getAllSupRecette($recette)
+            {
+               $suppleID =  DB::table('plats_supplements')->where('recettes','=',$recette)->get();
+               return $suppleID;
+            }
+
+            
+            //Delete supplemet recettes by recettes id
+            function deleteRecetteID($recette)
+            {
+              DB::table('plats_supplements')->where('recettes','=',$recette)->delete();
             }
 
             //Delete recette
             function deleteRecette($recetteid)
             {
-               DB::table('plats')->where('idplats','=',$recetteid)->delete();
+               $res = DB::table('plats')->where('idplats','=',$recetteid)->delete();
+               
                return response()->json(['statusCode'=>'200',
                                         'status'=>'true',
                                         'message'=>"recette supprimée avec succès",
                                         'data'=> '',
                                         'error'=> '',
                                       ]);
+            }
+
+            //Changer le state
+            function changeStateRecette($recette,$state)
+            {
+               DB::table('plats')->where('idplats','=',$recette)
+                                ->update(['disponible'=>$state]);
             }
 
             /*--------------------
@@ -903,7 +1055,7 @@ use App\Cinetpay\Cinetpay;
               //Get All clients
               function getAllClients()
               {
-                 $clientall = DB::table('client')->get();
+                 $clientall = DB::table('clients')->where('status','=','actif')->get();
                  $nb = count($clientall);
                   if ($nb!=0)
                   {
@@ -911,13 +1063,14 @@ use App\Cinetpay\Cinetpay;
                     foreach ($clientall as $client) 
                     {
                       $data[] = [
-                        'id'     => $client->idclient,
-                        'nom'    => $client->nom,
-                        'email'  => $client->email,
-                        'tel'    => $client->tel,
-                        'status' => $client->status,
-                        'parain' => $client->parain,
-                        'datecreat' => $client->datecreat
+                        'id'          => $client->idclient,
+                        'id_user'     => $client->iduser,
+                        'user'        => User::firstwhere('id',$client->iduser),
+                        'status'      => $client->status,
+                        'ambassadeur' => $client->ambassadeur,
+                        'status'      => $client->status,
+                        'created_at'  => Carbon::parse($client->created_at)->format('d-m-Y'),
+                        
                       ];
                     }
                     return response()->json(['statusCode'=>'200',
@@ -938,6 +1091,22 @@ use App\Cinetpay\Cinetpay;
                                             ]);
                   }
                  
+              }
+
+              //Get all client token
+              function ClientToken()
+              {
+                $clientall = DB::table('clients')->get();
+                return $clientall;
+              }
+              
+              //Get client infos by id
+              function getClientById($client)
+              {
+                 $clientdata = DB::table('clients')->where('idclient','=',$client)->first();
+                 $user = $clientdata->iduser;
+                 $userdata =  DB::table('users')->where('id','=',$user)->first();
+                 return $userdata;
               }
 
               //Get single client
@@ -997,7 +1166,7 @@ use App\Cinetpay\Cinetpay;
               //Delete client
               function deleteClients($clientsid)
               {
-                DB::table('client')->where('idclient','=',$clientsid)->update(["status"=>2]);;
+                DB::table('clients')->where('idclient','=',$clientsid)->update(["status"=>'inactif']);;
                 return response()->json(['statusCode'=>'200',
                                           'status'=>'true',
                                           'message'=>"compte client supprimé avec succès",
@@ -1023,23 +1192,43 @@ use App\Cinetpay\Cinetpay;
             /*---------------------
               GESTION DES LIVREURS
             ----------------------*/
-            
-              //Create livreur
-              function createLivreur($nom,$tel,$email,$local)
+              //Update livreur tokenFCM
+              function updateTokenFCM($livreur,$tokenFCM)
               {
-                $data = ['nom'=>$nom,
+                DB::table('livreurs')->where('idlivreur','=',$livreur)
+                                     ->update(['tokenFCM'=>$tokenFCM]);
+              }
+              //Update solde
+              function updateLivreurSolde($livreur,$solde)
+              {
+                DB::table('livreurs')->where('idlivreur','=',$livreur)
+                                     ->update(['solde'=>$solde]);
+              }
+              //Create livreur
+              function createLivreur($nom,$tel,$email,$local,$pass)
+              {
+               
+                $data = ['name'=>$nom,
                          'tel'=>$tel,
                          'email'=>$email,
-                         'local'=>$local
-                      ];
+                         'password'=> Hash::make($pass),
+                         'role'=>'livreur'
+                        ];
                 //Check
-                $restel = DB::table('livreurs')->where('tel', $tel)->first();
-                $resmail = DB::table('livreurs')->where('email', $email)->first();
+                $restel = DB::table('users')->where('tel', $tel)->first();
+                $resmail = DB::table('users')->where('email', $email)->first();
                 //result
                 if($restel == null && $resmail == null)
                 {
-                   DB::table('livreurs')->insert($data);
-                   return response()->json(['statusCode'=>'200',
+                   DB::table('users')->insert($data);
+                   $user = DB::table('users')->where('tel', $tel)->first();
+                   $dataLivreur = ['local'=>$local,'id_user'=>$user->id,'photo'=>'storage/app/public/livreur/hot_delivery.png'];
+                   DB::table('livreurs')->insert($dataLivreur);
+                   //Send SMS
+                   $msg = 'Votre mot de passe livreur est : '.$pass;
+                  //  Sendsms($msg,$tel,"DIDOU");
+                  SendEmail($email,'Ouverture de compte livreur',$msg);
+                  return response()->json(['statusCode'=>'200',
                                             'status'=>'true',
                                             'message'=>'livreur ajouté avec succès',
                                             'data'=> '',
@@ -1050,7 +1239,7 @@ use App\Cinetpay\Cinetpay;
                 {
                   return response()->json(['statusCode'=>'422',
                                            'status'=>'false',
-                                           'message'=>'Ce livreur existe déjà',
+                                           'message'=>"le numéro de téléphone ou l'email  existe déjà",
                                            'data'=> '',
                                            'error'=> '',
                                           ]);
@@ -1058,25 +1247,29 @@ use App\Cinetpay\Cinetpay;
               
               }
 
+
               //Get all livreurs
               function getAllLivreur()
               {
                   $livreurall = DB::table('livreurs')->get();
+                
                   $nb = count($livreurall);
                   if ($nb!=0)
                   {
                      $data  = [];
                      foreach ($livreurall as $livreur) 
                      {
+                        $livraison =  DB::table('commandes')
+                                        ->where('statut_livreur', '=', 'success')
+                                        ->where('livreur', '=', $livreur->idlivreur)
+                                        ->get();
                         $data  [] = [
-                          'id'     => $livreur->idlivreur,
-                          'nom'    => $livreur->nom,
-                          'email'  => $livreur->email,
-                          'tel'    => $livreur->tel,
-                          'status' => $livreur->status,
-                          'local'  => $livreur->local,
-                          'solde'  => $livreur->solde,
-                          'photo'  => $livreur->photo
+                          'id'       => $livreur->idlivreur,
+                          'user'     => User::firstwhere('id',$livreur->id_user),
+                          'status'   => $livreur->status,
+                          'solde'    => formatPrice($livreur->solde),
+                          'photo'    => env('APP_URL').$livreur->photo,
+                          'livraison'=> count($livraison),
                         ];
                      }
                      
@@ -1100,17 +1293,27 @@ use App\Cinetpay\Cinetpay;
                   
               }
 
-              //Get single livreurs
-              function getSingleLivreur($livreur)
+              //Function getLivreur info
+              function getLivreurInfo($livreur)
               {
-                  $livreurdata = DB::table('livreurs')->where('id_user','=',$livreur)->first();
+                $livreurdata = DB::table('livreurs')->where('id_user','=',$livreur)->first();                
+                return $livreurdata;
+              }
+
+              //Get single livreurs
+              function getSingleLivreur($user)
+              {
+                  $livreurdata = DB::table('livreurs')->where('id_user','=',$user)->first();
                   if ($livreurdata)
                   {
                     $data[] = [
                       'id'     => $livreurdata->idlivreur,
-                      'id_user' => $livreurdata->id_user,
                       'local'  => getZone_id($livreurdata->local),
-                      'solde'  => $livreurdata->solde
+                      'solde'  => $livreurdata->solde,
+                      'photo'  => $livreurdata->photo,
+                      'status' => $livreurdata->status,
+                      'user'   => DB::table('users')->where('id',$livreurdata->id_user)->first(),
+                      'commandes' => LivreurOrder($livreurdata->idlivreur)
                     ];
                     return response()->json(['statusCode'=>'200',
                                               'status'=>'true',
@@ -1138,46 +1341,60 @@ use App\Cinetpay\Cinetpay;
                 return $livreurdata;
               }
 
+              //get livreur with his id
+              function getLivreurById($id_livreur)
+              {
+                $livreurdata = DB::table('livreurs')->where('idlivreur','=',$id_livreur)->first();
+                if ($livreurdata) {
+                  $user = DB::table('users')->where('id',$livreurdata->id_user)->first();
+                  return $user;
+                }else{
+                  return "";
+                }
+               
+              }
+
 
               //Update livreur
-              function  updatlivreur($nom,$tel,$email,$local,$status,$photo,$id)
-              {
+              function  updatlivreur($nom,$tel,$email,$local,$status,$id)
+              { 
                   $data = ['nom'=>$nom,
                            'tel'=>$tel,
                            'email'=>$email,
                            'local'=>$local,
                            'status'=>$status,
-                           'photo'=>$photo
+                           'id'=>$id 
                           ];
-                  if ($nom!='') {
-                    DB::table('livreurs')->where('idlivreur','=',$id)
-                                        ->update(['nom'=>$nom,]);
+              
+                  //Check livreur data
+                  $livreur = DB::table('livreurs')->where('idlivreur','=',$id)->first();
+               
+                  if ($nom!='' && $livreur) {
+                    DB::table('users')->where('id','=',$livreur->id_user)
+                                      ->update(['name'=>$nom]);
+                  }
+                  
+                  if ($tel!='' && $livreur) {
+                    DB::table('users')->where('id','=',$livreur->id_user)
+                                        ->update(['tel'=>$tel]);
                   }
 
-                  if ($tel!='') {
-                    DB::table('livreurs')->where('idlivreur','=',$id)
-                                        ->update(['tel'=>$tel,]);
+                  if ($email!='' && $livreur) {
+                    DB::table('users')->where('id','=',$livreur->id_user)
+                                        ->update(['email'=>$email]);
                   }
 
-                  if ($email!='') {
+                  if ($local!='' && $livreur) {
                     DB::table('livreurs')->where('idlivreur','=',$id)
-                                        ->update(['email'=>$email,]);
+                                        ->update(['local'=>$local]);
                   }
 
-                  if ($local!='') {
+                  if ($status!='' && $livreur) {
                     DB::table('livreurs')->where('idlivreur','=',$id)
-                                        ->update(['local'=>$local,]);
+                                        ->update(['status'=>$status]);
                   }
 
-                  if ($status!='') {
-                    DB::table('livreurs')->where('idlivreur','=',$id)
-                                        ->update(['status'=>$status,]);
-                  }
-
-                  if ($photo!='') {
-                    DB::table('livreurs')->where('idlivreur','=',$id)
-                                        ->update(['photo'=>$photo]);
-                  }
+                
                  
 
                   return response()->json(['statusCode'=>'200',
@@ -1239,6 +1456,33 @@ use App\Cinetpay\Cinetpay;
                  }
               }
 
+              //Commande des livreurs
+              function LivreurOrder($livreur)
+              {
+                 $livraisondata = DB::table('commandes')->where('livreur','=',$livreur)->get();
+                 $nb = count($livraisondata);
+                 if ($nb!=0) {
+                   $data = [];
+                   foreach ($livraisondata as $order) {
+
+                      $client = DB::table('clients')->where('idclient',$order->idclients)->first();
+                      $user = DB::table('users')->where('id',$client->iduser)->first();
+                      $data[] = [
+                       'numcommd'  => $order->numComd,
+                       'qte'       => $order->qte,
+                       'montant'   => $order->montant,
+                       'client'    => $user->name.' - Tel: '.$user->tel,
+                       'date'      => $order->created_at,
+                       'status'    => $order->statut_livreur,
+
+                     ];
+                   }
+                   return $data;
+                 }else{
+                   return "";
+                 }
+              }
+
               //Liste des commandes en fonction du staut_livreur
               function orderLivreurStat($livreurid,$status)
               {
@@ -1270,7 +1514,6 @@ use App\Cinetpay\Cinetpay;
               function crediterSoldeLiv($livreurid)
               {
                  $livreurdata = DB::table('livreurs')->where('idlivreur','=',$livreurid)->first();
-
                  $solde = $livreurdata->solde+setting()->gainlivreur;
                  $data = ['solde'=>$solde];
                  DB::table('livreurs')->where('idlivreur','=',$livreurid)
@@ -1325,16 +1568,99 @@ use App\Cinetpay\Cinetpay;
                 DB::table('commandes')->insert($data);
               }
 
-              //Save commande details
-              function savecomprod($platId,$qte,$amount,$numComd,$client)
+              //Save commande details :: save plats's commmande
+              function savecomprod($platId,$qte,$amount,$numComd,$client,$precision_plats)
               {
                 $data = ['client_idclient'=>$client,
                         'plats_idplats'=>$platId,
                         'qte'=>$qte,
                         'numComd'=>$numComd,
-                        'montant'=>$amount
+                        'montant'=>$amount,
+                        'precision_plats'=>$precision_plats
                       ];
                 DB::table('panier')->insert($data);
+              }
+
+              //save commande panier supplements
+              function saveCommandSupplement($numComd,$plat_id,$supplement)
+              {
+                  $data = ['numComd'=>$numComd,
+                           'plats_id'=>$plat_id,
+                           'supplement_id'=>$supplement,
+                  ];
+                  DB::table('panier_supplements')->insert($data);
+              }
+
+              //Get all order by state
+              function getallorderState($state)
+              {
+                $commdall = DB::table('commandes')->where('statut_client','=',$state)->get();
+                $nb = count($commdall);
+                if ($nb!=0)
+                 {
+                    $data  = [];
+                    foreach ($commdall as $comd)
+                    {
+                       $data  [] = [
+                         'id'             => $comd->idcommandes,
+                         'numComd'        => $comd->numComd,
+                         'livreur'        => $comd->livreur,
+                         'statut_livreur' => $comd->statut_livreur,
+                         'statut_client'  => $comd->statut_client,
+                         'ambassadeur'    => $comd->ambassadeur_code,
+                         'code_gps'       => $comd->code_gps,
+                         'idclients'      => $comd->idclients,
+                         'zone_idzone'    => $comd->zone_idzone,
+                         'qte'            => $comd->qte,
+                         'montant'        => $comd->montant,
+                         'dateComd'       => $comd->dateComd,
+                       ];
+                    }
+                    return response()->json(['statusCode'=>'200',
+                                             'status'=>'true',
+                                             'message'=>'Liste des commandes',
+                                             'data'=> $data,
+                                             'error'=> '',
+                                           ]);
+                 }
+                 else
+                 {
+                     return response()->json(['statusCode'=>'404',
+                                               'status'=>'false',
+                                               'message'=>'Aucune commande trouvé',
+                                               'data'=> '',
+                                               'error'=> '',
+                                             ]);
+                 }
+                
+              }
+              //Update client TokenFCM
+              function updateFCM($client,$token)
+              {
+                DB::table('clients')->where('idclient','=',$client)
+                                    ->update(['tokenFCM'=>$token]);
+              }
+              //Get client infos
+              function ClientID($client)
+              {
+                $client = DB::table('clients')->where('idclient',$client)->first();
+                $data[] = [
+                  'user' => DB::table('users')->where('id',$client->iduser)->first(),
+                  'client'  => $client,
+                ];
+                return $data;
+
+              }
+              //Get livreur infos
+              function LivreurID($livreur)
+              {
+                $livreur = DB::table('livreurs')->where('idlivreur',$livreur)->first();
+                $data[] = [
+                  'user' => DB::table('users')->where('id',$livreur->id_user)->first(),
+                  'livreur'  => $livreur,
+                ];
+                return $data;
+
               }
 
               //Get all order
@@ -1347,19 +1673,24 @@ use App\Cinetpay\Cinetpay;
                      $data  = [];
                      foreach ($commdall as $comd)
                      {
+                        $livreur = '';
+                        if ($comd->livreur) {
+                          $livreur = LivreurID($comd->livreur);
+                        }
                         $data  [] = [
                           'id'             => $comd->idcommandes,
                           'numComd'        => $comd->numComd,
-                          'livreur'        => $comd->livreur,
+                          'livreur'        => $livreur,
                           'statut_livreur' => $comd->statut_livreur,
                           'statut_client'  => $comd->statut_client,
-                          'ambassadeur'    => $comd->ambassadeur,
+                          'ambassadeur'    => $comd->ambassadeur_code,
                           'code_gps'       => $comd->code_gps,
-                          'idclients'      => $comd->idclients,
-                          'zone_idzone'    => $comd->zone_idzone,
+                          'client'         => ClientID($comd->idclients),
+                          'zone_idzone'    => DB::table('zone')->where('idzone',$comd->zone_idzone)->first(),
                           'qte'            => $comd->qte,
                           'montant'        => $comd->montant,
                           'dateComd'       => $comd->dateComd,
+                          
                         ];
                      }
                      return response()->json(['statusCode'=>'200',
@@ -1387,19 +1718,24 @@ use App\Cinetpay\Cinetpay;
                  $orderdata = DB::table('commandes')->where('idcommandes','=',$orderid)->first();
                  if ($orderdata) 
                  {
+                    $livreur = '';
+                    if ($orderdata->livreur) {
+                      $livreur = LivreurID($orderdata->livreur);
+                    }
                     $data  [] = [
-                      'id'             => $orderdata->idcommandes,
-                      'numComd'        => $orderdata->numComd,
-                      'livreur'        => $orderdata->livreur,
-                      'statut_livreur' => $orderdata->statut_livreur,
-                      'statut_client'  => $orderdata->statut_client,
-                      'ambassadeur_code'    => $orderdata->ambassadeur_code,
-                      'code_gps'       => $orderdata->code_gps,
-                      'idclients'      => $orderdata->idclients,
-                      'zone_idzone'    => $orderdata->zone_idzone,
-                      'qte'            => $orderdata->qte,
-                      'montant'        => $orderdata->montant,
-                      'datecomd'       => $orderdata->dateComd,
+                      'id'               => $orderdata->idcommandes,
+                      'numComd'          => $orderdata->numComd,
+                      'plats'            => getPlatComd($orderdata->numComd),
+                      'livreur'          => $livreur,
+                      'statut_livreur'   => $orderdata->statut_livreur,
+                      'statut_client'    => $orderdata->statut_client,
+                      'ambassadeur_code' => $orderdata->ambassadeur_code,
+                      'code_gps'         => $orderdata->code_gps,
+                      'clients'          => getClientById($orderdata->idclients),
+                      'lieu'             => getZone_id($orderdata->zone_idzone)->nom,
+                      'qte'              => $orderdata->qte,
+                      'montant'          => $orderdata->montant,
+                      'datecomd'         => $orderdata->dateComd,
                     ];
                     return response()->json(['statusCode'=>'200',
                                               'status'=>'true',
@@ -1469,6 +1805,79 @@ use App\Cinetpay\Cinetpay;
                   
               }
 
+              //Get supplement commande plats
+              function getSupplementPlat($numComd,$plat_id)
+              {
+                $orderdata = DB::table('panier_supplements')->where('numComd','=',$numComd)->where('plats_id','=',$plat_id)->get();
+                $nb = count($orderdata);
+                $data=[];
+                if ($nb!=0) {
+                  foreach ($orderdata as $order) {
+                    $data [] = getsingleSupplement($order->supplement_id);
+                
+                  }
+                }
+                return $data;
+              }
+
+              //Get commande plats
+              function getPlatComd($numComd)
+              {
+                $orderdata = DB::table('panier')->where('numComd','=',$numComd)->get();
+                $data  = [];
+                foreach ($orderdata as $order) 
+                {
+                  $data  [] = ['id'         => DB::table('plats')->where('idplats','=',$order->plats_idplats)->first()->idplats,
+                               'nom'        => DB::table('plats')->where('idplats','=',$order->plats_idplats)->first()->nomrecette,
+                               'image'      => DB::table('plats')->where('idplats','=',$order->plats_idplats)->first()->image,
+                               'montant'    => $order->montant,
+                               'qte'        => $order->qte,
+                               'precision'  => $order->precision_plats,
+                               'supplement' => getSupplementPlat($numComd,$order->plats_idplats),
+                              ];
+                }
+                return $data;
+              }
+
+              //Get recettes by commande
+              function getOrderRecette($numComd)
+              {
+                $orderdata = DB::table('panier')->where('numComd','=',$numComd)->get();
+                $nb = count($orderdata);
+                if ($nb!=0)
+                {
+                   $data  = [];
+                   foreach ($orderdata as $order) 
+                   {
+                     $data  [] = [ 'numComd'         => $order->numComd,
+                                   'montant'         => $order->montant,
+                                   'qte'             => $order->qte,
+                                   'client_idclient' => $order->client_idclient, 
+                                   'plats_idplats'   => DB::table('plats')->where('idplats','=',$order->plats_idplats)->first(),
+                                 ];
+                   }
+                } 
+                return $data;
+              }
+
+              //Get commande supplement
+              function getOrderSupplement($numComd)
+              {
+                 $supplement = DB::table('panier_supplements')->where('numComd','=',$numComd)->get();
+                 $nb = count($supplement);
+                 if ($nb!=0) {
+                   $data  = [];
+                   foreach ($supplement as $sup) {
+                     $data [] = [
+                       'supplement' => DB::table('supplements')->where('idsupplements','=', $sup->supplement_id)->first(),
+                     ];
+                   }
+                   return $data;
+                 }else{
+                  return "";
+                 }
+              }
+
               //Get commande details :: recupérer les plats d'une commande
               function getOrderPlats($numComd)
               {
@@ -1483,7 +1892,9 @@ use App\Cinetpay\Cinetpay;
                                     'montant'         => $order->montant,
                                     'qte'             => $order->qte,
                                     'client_idclient' => $order->client_idclient,
-                                    'plats_idplats'   => $order->plats_idplats,
+                                    'précision'       => $order->precision_plats,
+                                    'recettes'        => DB::table('plats')->where('idplats','=', $order->plats_idplats)->first(),
+                                    'supplements'     => getOrderSupplement($order->numComd)
                                   ];
                     }
 
@@ -1532,6 +1943,22 @@ use App\Cinetpay\Cinetpay;
                                            'error'=> '',
                                         ]);
               }
+
+              //Give commande to livreur
+              function giveOrderToLivreur($idcommandes,$idlivreur)
+              {
+                $livreur = getLivreurById($idlivreur);
+                // sendPush($livreur->tokenFCM,'Livraison','une livraison vous a été affectée','','LIVREUR_ACTION');
+                SendEmail($livreur->email,'Afffectation de commande','une livraison vous a été affectée');
+                DB::table('commandes')->where('idcommandes','=',$idcommandes)
+                                      ->update(['livreur'=>$idlivreur,'statut_livreur'=>'pending','statut_client'=>'pending']);
+              }
+
+              //Suppression de galerie
+              function deletGalerie($id_galerie)
+              {
+                DB::table('plats_galeries')->where('id', '=', $id_galerie)->delete();
+              }
             
             /**
                * --------------------------
@@ -1542,6 +1969,7 @@ use App\Cinetpay\Cinetpay;
               //Générer un crédit
               function creatcredit($clientid)
               {
+                
                   $data = DB::table('credit_didou')->where('client_idclient','=',$clientid)
                                                    ->where('statutCredit','=','false') 
                                                    ->first();
@@ -1550,12 +1978,17 @@ use App\Cinetpay\Cinetpay;
 
                   if($data=='')
                   {
-                    //Vérifier si le client a déjà fait une commande minimum qui équivaut à la valeur paramétré
+                    //Vérifier si la valeur totale des commandes du client équivaut au minimum  à la valeur paramétré
                     $commande = DB::table('commandes')->where('idclients','=',$clientid)
-                                                      ->where('statut_client','=','sucess') 
-                                                      ->where('montant','=',$setting->creditDidou) 
-                                                      ->first();
-                    if ($commande) {
+                                                      ->where('statut_client','=','success') 
+                                                      ->get();
+                    //Montant total des commandes
+                    $montant_total = 0;
+                    foreach ($commande as $value) {
+                      $montant_total = $montant_total+$value->montant;
+                    }
+                  
+                    if ($montant_total >= $setting->conditionCredit) {
                         $data = ['client_idclient'=>$clientid,
                                  'creditDidou'=>generatecredit(),
                                  'montant'=>setting()->creditDidou,
@@ -1564,14 +1997,16 @@ use App\Cinetpay\Cinetpay;
                         DB::table('credit_didou')->insert($data);
                         return response()->json(['statusCode'=>'200',
                                        'status'=>'true',
-                                       'message'=>"crédit accordé avec succès. Vous avez ".setting()->creditDidou." fcfa",
+                                       'titre'=>'crédit accordé',
+                                       'message'=>"Vous avez ".formatPrice($setting->creditDidou)." fcfa",
                                        'data'=> $data,
                                        'error'=> '',
                                      ]);
                     }else {
                       return response()->json(['statusCode'=>'423',
                                                 'status'=>'false',
-                                                'message'=>"crédit refusé. Vous devez effectuée une première commande de ".$setting->creditDidou." fcfa avant d'être éligible",
+                                                'titre' =>'Crédit refusé',
+                                                'message'=>"Le montant total de toutes vos commandes précédentes doivent être au minimum ".formatPrice($setting->conditionCredit)." fcfa avant d'être éligible",
                                                 'data'=> $data,
                                                 'error'=> '',
                                               ]);   
@@ -1582,7 +2017,8 @@ use App\Cinetpay\Cinetpay;
                   {
                     return response()->json(['statusCode'=>'423',
                                               'status'=>'false',
-                                              'message'=>"crédit refusé. Vous devez ".$data->montant." fcfa",
+                                              'titre'=>'Crédit refusé',
+                                              'message'=>"Vous devez ".$data->montant." fcfa",
                                               'data'=> $data,
                                               'error'=> '',
                                             ]);    
@@ -1603,8 +2039,10 @@ use App\Cinetpay\Cinetpay;
                     $creditPay = 0;
                     foreach ($creditdata as $credit) 
                     {
-                        $data  [] = ['id'              =>$credit->idcredit,
+                        $client = DB::table('clients')->where('idclient','=',$credit->client_idclient)->first();       
+                        $data  [] = [ 'id'             =>$credit->idcredit,
                                       'client_idclient'=>$credit->client_idclient,
+                                      'user'           => User::firstwhere('id',$client->iduser),
                                       'statutCredit'   =>$credit->statutCredit,
                                       'creditDidou'    =>$credit->creditDidou,
                                       'montant'        =>$credit->montant,
@@ -1643,7 +2081,7 @@ use App\Cinetpay\Cinetpay;
               //Recupérer les crédit d'un client
               function getAllUSerCredit($clientID)
               {
-                $creditdata = DB::table('credit_didou')->where('client_idclient','=',$clientID)->get();
+                $creditdata = DB::table('credit_didou')->where('client_idclient','=',$clientID)->orderByDesc('idcredit')->get();
                 $nb = count($creditdata);
                 if ($nb!=0) 
                 {
@@ -1698,21 +2136,6 @@ use App\Cinetpay\Cinetpay;
                 if ($creditdata)
                 {
                   DB::table('credit_didou')->where('creditDidou','=',$code_didou)->update(['statutCredit'=>"true"]);
-                  return response()->json(['statusCode'=>'200',
-                                          'status'=>'true',
-                                          'message'=>"Crédit Didou remboursé avec succès",
-                                          'data'=> $creditdata,
-                                          'error'=> '',
-                                         ]);
-                }
-                else
-                {
-                  return response()->json(['statusCode'=>'404',
-                                          'status'=>'false',
-                                          'message'=>'Code crédit  invalide',
-                                          'data'=> '',
-                                          'error'=> '',
-                                        ]);
                 }
               }
 
@@ -1746,6 +2169,16 @@ use App\Cinetpay\Cinetpay;
                             ];
                     //Check
                     $resambd = DB::table('ambassadeur')->where('client_idclient', $clientid)->first();
+                    if($resambd)
+                    {
+                      return response()->json(['statusCode'=>'422',
+                                                'status'=>'false',
+                                                'message'=>'Vous avez déjà une demande en cours de traitement, veuillez patienter svp',
+                                                'data'=> '',
+                                                'error'=> '',
+                                            ]);
+                    }
+
                     if ($resambd == null) 
                     {
                         DB::table('ambassadeur')->insert($data);
@@ -1792,12 +2225,17 @@ use App\Cinetpay\Cinetpay;
                    $data  = [];
                    foreach ($ambAll as $amb)
                    {
+                      $client = DB::table('clients')->where('idclient',$amb->client_idclient)->first();
+                      $user = DB::table('users')->where('id',$client->iduser)->first();
+                      $orderdata = DB::table('commandes')->where('ambassadeur_code','=',$amb->code)->get();
                       $data  [] = [
                         'id'                    => $amb->idambassadeur ,
                         'code'                  => $amb->code,
-                        'client_idclient'       => $amb->client_idclient,
+                        'client_idclient'       => $user->name.' - '.$user->tel,
                         'statut_ambassadeur'    => $amb->statut_ambassadeur,
-                        'solde'                 => $amb->solde
+                        'solde'                 => $amb->solde,
+                        'commandes'             => count($orderdata),
+                        'date'                  => $amb->created_at
                       ];
                    }
                    return response()->json(['statusCode'=>'200',
@@ -1818,7 +2256,7 @@ use App\Cinetpay\Cinetpay;
                  }
                  
               }
-
+             
               //recuperer un ambassadeur
               function getSinglambassad($clientID)
               {
@@ -1830,7 +2268,8 @@ use App\Cinetpay\Cinetpay;
                     'code'               => $ambData->code,
                     'client_idclient'    => $ambData->client_idclient ,
                     'statut_ambassadeur' => $ambData->statut_ambassadeur,
-                    'solde'              => $ambData->solde
+                    'solde'              => $ambData->solde,
+                    'appLink'            => setting()->applink
                   ];
                   return response()->json(['statusCode'=>'200',
                                             'status'=>'true',
@@ -1844,70 +2283,160 @@ use App\Cinetpay\Cinetpay;
                   return response()->json(['statusCode'=>'404',
                                             'status'=>'false',
                                             'message'=>'ambassadeur non trouvé',
-                                            'data'=> '',
+                                            'data'=> [],
                                             'error'=> '',
                                          ]);
                 }
                 
               }
+               //get infos client by ambassadeur code
+               function getAmb($code)
+               {
+                  $ambData = DB::table('ambassadeur')->where('code','=',$code)->first();
+                  $clientdata = DB::table('clients')->where('idclient','=',$ambData->client_idclient)->first();
+                  return $clientdata;
+               }
 
               //Crediter le solde
               function creditersoldAmbasad($amb)
               {
                  $ambData = DB::table('ambassadeur')->where('code','=',$amb)->first();
-                 $solde = $ambData->solde+setting()->gainambassadeur;
-                 $data = ['solde'=>$solde];
-                 DB::table('ambassadeur')->where('code','=',$amb)
-                                         ->update($data);
+                //  return $ambData;
+                 if ($ambData) {
+                    $solde = $ambData->solde+setting()->gainambassadeur;
+                    $data = ['solde'=>$solde];
+                    DB::table('ambassadeur')->where('code','=',$amb)
+                                            ->update($data);
+                 }
                  
               }
 
               //Débiter un solde
-              function debiterSoldAmbasad($amb,$montant)
+              function debiterSoldAmbasad($amb,$montant,$payment_method)
               {
                 $ambData = DB::table('ambassadeur')->where('code','=',$amb)->first();
-             
-                if ($ambData) 
-                {
+                if ($ambData) {
+                 $client = getClientById($ambData->client_idclient);
+                 if ($ambData) 
+                 {
                   if ($montant <= $ambData->solde)
                   {
-                    $solde = $ambData->solde-$montant;
-                    DB::table('ambassadeur')->where('code','=',$amb)
-                                            ->update(['solde'=>$solde]);
-                    
                     $data = ['montant'=>$montant,
                              'date'=>date('d-m-Y'),
                              'type'=>"Paiemnet Mobile money",
                              'client_idclient'=>$ambData->client_idclient,
-                            ];
-                    DB::table('ambassadeur_pay')->insert($data);
-                    return response()->json(['img'=>'200',
-                                             'titre'=>'true',
-                                             'message'=>"Votre solde a été débité de ".$montant." Fcfa avec succès, il vous reste ".$solde." Fcfa",
-                                             'data'=> $data,
-                                             'error'=> '',
-                                            ]);                        
-
-
+                            ];     
+                    //Lancement de CinetPay pour le transfert
+                    $transfert_id = date("YmdHis");
+                    $phone = $client->tel;
+                    $name = $client->name;
+                    $email = $client->email ?? support();
+                    $type = 'ambassadeur';
+                    $profil_id = $ambData->client_idclient;
+                    #Calcul de frais
+                    $frais = ($montant*2)/100;
+                    $total_ttc = $montant+$frais;
+                    $solde = $ambData->solde-$total_ttc;    
+                    if ($solde < 0) {
+                      return response()->json(['statusCode'=>404,
+                                              'status'=>false,
+                                              'message'=>"Votre solde est insuffisant pour le transfert, frais de retrait : ".$frais." Fcfa",
+                                              'data'=> '',
+                                              'error'=> '',
+                                          ],404);
+                    }
+                    $res = GuichetPayOut($transfert_id,$phone,$montant,$name,$email,$type,$payment_method,$profil_id);
+                    if ($res->code==0) {
+                      return response()->json(['statusCode'=>200,
+                                              'status'=>false,
+                                              'message'=>"Paiement effectué avec succès",
+                                              'data'=> '',
+                                              'error'=> '',
+                                          ],200);
+                 }
+                 if ($res->code==-1) {
+                  return response()->json(['statusCode'=>400,
+                                          'status'=>false,
+                                          'message'=>"Paiement refusé, veuillez ressayer plutard",
+                                          'data'=> '',
+                                          'error'=> '',
+                                      ],400);
+                 }
+                 if ($res->code==602) {
+                  return response()->json(['statusCode'=>400,
+                                           'status'=>false,
+                                           'message'=>"Paiement non actif pour le moment",
+                                           'data'=> '',
+                                           'error'=> '',
+                                          ],400);
+                 }
+                 if ($res->code==804) {
+                  return response()->json(['statusCode'=>400,
+                                           'status'=>false,
+                                           'message'=>"Transaction echoué, le moyen de paiement choisi est indisponible",
+                                           'data'=> '',
+                                           'error'=> '',
+                                          ],400);
+                 }
+                 return response()->json(['statusCode'=>400,
+                                          'status'=>false,
+                                          'message'=>"Une erreur s'est produite, veuillez ressayer plutard",
+                                          'data'=> '',
+                                          'error'=> '',
+                                      ],400);
                   }
                   else
                   {
-                    return response()->json(['statusCode'=>'404',
+                    return response()->json(['statusCode'=>404,
                                              'status'=>'false',
                                              'message'=>'Le montant dépasse le solde de votre compte ambassadeur',
                                              'data'=> '',
                                              'error'=> '',
-                                            ]);
+                                            ],404);
                   }
-                }else{
+                 }else{
                   return response()->json(['statusCode'=>'404',
                                            'status'=>'false',
                                            'message'=>'Code ambassadeur invalide',
                                            'data'=> '',
                                            'error'=> '',
                                           ]);
+                 }
+                }else{
+                  return response()->json([
+                    'statusCode'=>404,
+                    'status' => false,
+                    'message' => "Ce code ambassadeur n'existe pas",
+                    'errors' => ''
+                  ], 404);
                 }
                
+              }
+
+              //get ambassadeur infos single
+              function getSingleAmbassadeur($code_amb)
+              {
+                $amb = DB::table('ambassadeur')->where('code','=',$code_amb)->first();
+                return $amb;
+              }
+              //Insertion dans la table ambassadeur_pay
+              function AmbassadeurPay($amount,$profil_id)
+              {
+                //Calcul des fraiss
+                $ambData = DB::table('ambassadeur')->where('client_idclient','=',$profil_id)->first();
+                $frais = ($amount*2)/100;
+                $total_ttc = $amount+$frais;
+                $solde = $ambData->solde-$total_ttc;
+                //Mise à jour du solde
+                DB::table('ambassadeur')->where('client_idclient','=',$profil_id)
+                                        ->update(['solde'=>$solde]);
+                //Enregistrement de la transaction
+                $data = ['montant'=>$total_ttc,
+                         'date'=>date('d-m-Y'),
+                         'type'=>"Paiemnet Mobile money",
+                         'client_idclient'=>$profil_id,
+                ];
+                 DB::table('ambassadeur_pay')->insert($data);
               }
 
               //Recupérer les commandes d'un ambassadeur
@@ -1970,7 +2499,7 @@ use App\Cinetpay\Cinetpay;
                   foreach ($pushdata as $push) 
                   {
                       $data[] = ['id'=>$push->idpush,
-                                 'img'=>$push->img,
+                                 'img'=>env('APP_URL').$push->img,
                                  'titre'=>$push->titre,
                                  'message'=>$push->message,
                                  'debut'=>$push->debut,
@@ -2029,6 +2558,13 @@ use App\Cinetpay\Cinetpay;
                                       ]);
                   }
               }
+
+              //Suppression de push
+              function deletePush($push_id)
+              {
+                //Suppression de push
+                DB::table('push')->where('idpush', '=', $push_id)->delete();
+              }
             
             /**
              * ------------------
@@ -2072,7 +2608,7 @@ use App\Cinetpay\Cinetpay;
               //recupérer les comptes user
               function getalluser()
               { 
-                  $userdata = DB::table('users')->get();
+                  $userdata = DB::table('users')->where('role','=','admin')->get();
                   $nb = count($userdata);
                   if ($nb!=0) 
                   {
@@ -2189,9 +2725,9 @@ use App\Cinetpay\Cinetpay;
              * ----------------
              */
               //enregistrer une zone
-              function creatzone($zone)
+              function creatzone($zone,$long,$larg)
               {
-                 $data = ['nom'=>ucfirst($zone)];  
+                 $data = ['nom'=>ucfirst($zone),'longitude'=>$long,'largitude'=>$larg];  
                  //check
                  $zonedata = DB::table('zone')->where('nom','=',$zone)->first();
                  //result
@@ -2226,7 +2762,9 @@ use App\Cinetpay\Cinetpay;
                     {
                       $data [] = ['id'=>$zone->idzone,
                                   'nom'=>$zone->nom,
-                                  'statut'=>$zone->statut
+                                  'statut'=>$zone->statut,
+                                  'longitude'=>$zone->longitude,
+                                  'largitude'=>$zone->largitude
                                  ];  
                     }
                     return response()->json(['statusCode'=>'200',
@@ -2247,10 +2785,10 @@ use App\Cinetpay\Cinetpay;
 
               }
               //modifier zone
-              function updatezone($zone,$zoneid)
+              function updatezone($zone,$zoneid,$long,$larg)
               {
                 DB::table('zone')->where('idzone','=',$zoneid)
-                                 ->update(['nom'=>ucfirst($zone)]);
+                                 ->update(['nom'=>ucfirst($zone),'longitude'=>$long,'largitude'=>$larg]);
                 
                 return response()->json(['statusCode'=>'200',
                                         'status'=>'true',
@@ -2274,33 +2812,40 @@ use App\Cinetpay\Cinetpay;
                                         ]);
               }
               //Commande d'une zone
-              function getOrderzone($zoneid)
+              function getOrderzone()
               {
-
-                $orderdata = DB::table('commandes')->where('statut_client','=',"success")
-                                                   ->get();
-
-                $orderdatabyzone = DB::table('commandes')->where('zone_idzone','=',$zoneid)
-                                                  ->where('statut_client','=',"success")
-                                                  ->get();
-                $nborder = count($orderdata);
-                $nbzone = count($orderdatabyzone);
-                if ($nbzone!=0) {
-                  $zonepourcenage = (100*$nbzone)/$nborder;
-                  return response()->json(['statusCode'=>'200',
-                                          'status'=>'true',
-                                          'message'=>'commande de la zone',
-                                          'data'=> $zonepourcenage.' %',
-                                          'error'=> '',
-                                        ]);
-                } else {
-                  return response()->json(['statusCode'=>'404',
-                                          'status'=>'false',
-                                          'message'=>'Aucune commande trouvée',
-                                          'data'=> '0 %',
-                                          'error'=> '',
-                                        ]);
+                //Get all zones
+                $zonedata = DB::table('zone')->get();
+                $data = [];
+                foreach ($zonedata as $zone) 
+                {
+                  $zoneid = $zone->idzone;
+                  $orderdata = DB::table('commandes')->where('statut_client','=',"success")->get();
+                  $orderdatabyzone = DB::table('commandes')->where('zone_idzone','=',$zoneid)
+                                                          ->where('statut_client','=',"success")
+                                                          ->get();
+                  $nborder = count($orderdata);
+                  $nbzone = count($orderdatabyzone);
+                  if ($nbzone!=0) {
+                    $zonepourcenage = (100*$nbzone)/$nborder;
+                  }else{
+                    $zonepourcenage = 0;
+                  }
+                    $data [] = [
+                       'zone'        =>$zone->nom,
+                       'pourcentage' =>$zonepourcenage,
+                       'unite'       => '%'
+                    ];
+                   
+                  
                 }
+
+                return response()->json(['statusCode'=>'200',
+                                          'status'=>'true',
+                                          'message'=>'pourcentage de commandes par zone',
+                                          'data'=> $data,
+                                          'error'=> '',
+                                        ]);
                 
               }
 
@@ -2319,6 +2864,11 @@ use App\Cinetpay\Cinetpay;
                * -----------------------
             */
                 //recuperer les paramètres didou
+                function getSettingIn()
+                {
+                  $setting = DB::table('settings')->where('idsettings','=',1)->first();
+                  return $setting;
+                }
                 function getsetting()
                 {
                   $setting = DB::table('settings')->where('idsettings','=',1)->first();
@@ -2330,13 +2880,16 @@ use App\Cinetpay\Cinetpay;
                                         ]);
                 }
                 //paramétrer didou
-                function settingDidou($gainlivreur,$gainambassadeur,$promoComd,$creditDidou)
+                function settingDidou($gainlivreur,$gainambassadeur,$promoComd,$creditDidou,$conditionCredit,$commandeAffilier)
                 {
                     $data = ['gainlivreur'     =>$gainlivreur,
                              'gainambassadeur' =>$gainambassadeur, 
                              'promoComd'       =>$promoComd,
-                             'creditDidou'     =>$creditDidou
+                             'creditDidou'     =>$creditDidou,
+                             'conditionCredit' =>$conditionCredit,
+                             'commandeAffilier'=>$commandeAffilier
                             ];
+                    
                     if ($gainlivreur!='') 
                     {
                       DB::table('settings')->where('idsettings','=',1)
@@ -2357,6 +2910,22 @@ use App\Cinetpay\Cinetpay;
                     {
                       DB::table('settings')->where('idsettings','=',1)
                                            ->update(['creditDidou'=>$creditDidou]);
+                    }
+
+                    if ($creditDidou!='') 
+                    {
+                      DB::table('settings')->where('idsettings','=',1)
+                                           ->update(['creditDidou'=>$creditDidou]);
+                    }
+
+                    if ($conditionCredit!='') 
+                    {
+                      DB::table('settings')->where('idsettings','=',1)->update(['conditionCredit'=>$conditionCredit]);
+                    }
+
+                    if ($commandeAffilier!='') 
+                    {
+                      DB::table('settings')->where('idsettings','=',1)->update(['commandeAffilier'=>$commandeAffilier]);
                     }
                     
                     return response()->json(['statusCode'=>'200',
@@ -2430,37 +2999,76 @@ use App\Cinetpay\Cinetpay;
     * GESTION DE COMMANDES
     * --------------------
     */
+      //update payement state
+      function updatePayState($trans_id)
+      {
+        DB::table('paiement')->where('transaction_id','=',$trans_id)->update(['state'=>1]);
+        DB::table('transaction_commandes')->where('id_transaction','=',$trans_id)->update(['status_transaction'=>1]);
+      }
+      //Get transactions paiement by transaction_id
+      function getTransPay($trans_id)
+      {
+        $pay = DB::table('paiement')->where('transaction_id','=',$trans_id)->first();
+        return $pay;
+      }
+      //Get transactions commande by transaction_id
+      function getTransComd($trans_id)
+      {
+        $commande = DB::table('transaction_commandes')->where('id_transaction','=',$trans_id)->first();
+        return $commande;
+      }
+      //Suppression panier commande
+      function deletepanier($comd)
+      {
+        DB::table('panier')->where('numComd','=',$comd)->delete();
+      }
+      //suppression supplement commande
+      function deletesup($comd)
+      {
+        DB::table('panier_supplements')->where('numComd','=',$comd)->delete();
+      }
+      //suppression commande
+      function deletecomd($comd)
+      {
+        DB::table('transaction_commandes')->where('numcomd','=',$comd)->delete();
+      }
       //Save transactions
-      function saveTransaction($clientid,$ambassadeur,$credit_didou,$montant,$qte,$gps,$zoneid,$dateComd,$statutClient,$data_recettes,$id_transaction)
+      function saveTransaction($clientid,$numcomd,$longitude,$largitude,$montantpay,$ambassadeur,$credit_didou,$montant,$qte,$zoneid,$dateComd,$statutClient,$id_transaction,$zoneprecise)
       {
         $data = ['clientid'          => $clientid,
+                 'numcomd'           => $numcomd,
+                 'longitude'         => $longitude,
+                 'largitude'         => $largitude,
+                 'montantpay'        => $montantpay,
                  'ambassadeur_code'  => $ambassadeur,
                  'credit_didou'      => $credit_didou,
                  'montant'           => $montant,
                  'qte'               => $qte,
-                 'gps'               => $gps,
                  'zoneid'            => $zoneid,
+                 'zoneprecise'       => $zoneprecise,
                  'dateComd'          => $dateComd,
                  'statutClient'      => $statutClient,
-                 'data_recettes'     => $data_recettes,
                  'id_transaction'    => $id_transaction,
                 ];
         DB::table('transaction_commandes')->insert($data);
       }
-
+      
       //Save commande
-      function saveCommand($clientid,$ambassadeur,$credit_didou,$montant,$qte,$gps,$zoneid,$dateComd,$statutClient,$numComd,$precision_plats)
+      function saveCommand($clientid,$ambassadeur,$credit_didou,$montant,$montantpay,$qte,$zoneid,$dateComd,$statutClient,$numComd,$longitude,$largitude,$zoneprecise)
       {
         $data = ['idclients'         => $clientid,
                  'ambassadeur_code'  => $ambassadeur,
                  'code_credit'       => $credit_didou,
                  'montant'           => $montant,
-                 'precision_plats'   => $precision_plats,
+                 'montantpay'        => $montantpay,
                  'qte'               => $qte,
-                 'code_gps'          => $gps,
                  'zone_idzone'       => $zoneid,
+                 'zoneprecise'       => $zoneprecise,
+                  'longitude'        => $longitude,
+                  'largitude'        => $largitude,
                  'dateComd'          => $dateComd,
                  'statut_client'     => $statutClient,
+                 'statut_livreur'    => $statutClient,
                  'numComd'           => $numComd
                 ];
         DB::table('commandes')->insert($data);
@@ -2483,27 +3091,27 @@ use App\Cinetpay\Cinetpay;
 
           }elseif ($statut_client=="success"){
             DB::table('commandes')->where('idcommandes','=',$idcommandes)
-                                  ->update(['statut_client'=>$statut_client]);
+                                  ->update(['statut_client'=>$statut_client,'statut_livreur'=>$statut_client]);
             $commande = DB::table('commandes')->where('idcommandes','=',$idcommandes)->first();
             $message = "Commande livrée avec succès";
 
           }elseif ($statut_client=="fail"){
             DB::table('commandes')->where('idcommandes','=',$idcommandes)
-                                  ->update(['statut_client'=>$statut_client]);
+                                  ->update(['statut_client'=>$statut_client,'statut_livreur'=>$statut_client]);
             $commande = DB::table('commandes')->where('idcommandes','=',$idcommandes)->first();
             $message = "Commande annulée avec succès";
 
           }elseif ($statut_client=="init") {
 
             DB::table('commandes')->where('idcommandes','=',$idcommandes)
-                                  ->update(['statut_client'=>$statut_client]);
+                                  ->update(['statut_client'=>$statut_client,'statut_livreur'=>$statut_client]);
             $commande = DB::table('commandes')->where('idcommandes','=',$idcommandes)->first();
             $message = "Commande reçu avec succès, vous serez livrée dans 10 minutes";
 
           }else{
             
             $message = "Status de la commande incorrecte";
-            return response()->json(['statusCode' =>'401',
+            return response()->json(['statusCode' =>'404',
                                       'status'    =>false,
                                       'message'   => $message,
                                       'error'     => '',
@@ -2517,11 +3125,11 @@ use App\Cinetpay\Cinetpay;
                                  ]);
           
         }else{
-          return response()->json(['statusCode'=>401,
+          return response()->json(['statusCode'=>404,
                                    'status' => false,
                                    'message' => "Cette commande n'existe pas",
                                    'error' => ''
-                                 ], 401);
+                                 ], 404);
         }
        
       }
@@ -2552,32 +3160,58 @@ use App\Cinetpay\Cinetpay;
                                 ]);
         }
         else{
-          return response()->json(['statusCode'=>401,
+          return response()->json(['statusCode'=>404,
                                    'status' => false,
-                                   'message' =>  $state,
+                                   'message' =>  "aucune ".$state,
                                    'error' => ''
-                                 ], 401);
+                                 ], 404);
         }
       }
 
       //Get client all command
       function getClientComdAll($client_id)
       {
-        $commande = DB::table('commandes')->where('idclients','=',$client_id)->get();
+        $commande = DB::table('commandes')->where('idclients','=',$client_id)->orderBy('idcommandes', 'desc')->get();
         $nb = count($commande);
         if ($nb!=0) {
+          $data=[];
+          foreach ($commande as $orderdata) 
+          {
+            $livreur = '';
+            if ($orderdata->livreur) {
+              $livreur = getLivreurById($orderdata->livreur);
+            }
+            $data [] = [
+              'id'               => $orderdata->idcommandes,
+              'clients'          => getClientById($orderdata->idclients),
+              'lieu'             => getZone_id($orderdata->zone_idzone)->nom,
+              'livreur'          => $livreur,
+              'numComd'          => $orderdata->numComd,
+              'plats'            => getPlatComd($orderdata->numComd),
+              'statut_livreur'   => $orderdata->statut_livreur,
+              'statut_client'    => $orderdata->statut_client,
+              'ambassadeur_code' => $orderdata->ambassadeur_code,
+              'code_gps'         => $orderdata->code_gps,
+              'qte'              => $orderdata->qte,
+              'montant'          => $orderdata->montant,
+              'datecomd'         => $orderdata->created_at,
+              'longitude'        => $orderdata->longitude,
+              'largitude'        => $orderdata->largitude,
+            ];
+          }
+
           return response()->json(['statusCode'=>'200',
                                     'status'=>'true',
                                     'message'=> "Historique des commandes du client",
-                                    'data'=> $commande,
+                                    'data'=> $data,
                                     'error'=> '',
                                   ]);
         }else{
-          return response()->json(['statusCode'=>401,
+          return response()->json(['statusCode'=>404,
                                    'status'    => false,
                                    'message'   => "Aucune commande trouvée pour ce client",
                                    'error'     => ''
-                                  ], 401);
+                                  ], 404);
         }
       }
 
@@ -2588,12 +3222,13 @@ use App\Cinetpay\Cinetpay;
     * ------------------------
     */
       //Add Push
-      function addUserPush($titre,$message,$state,$id_user)
+      function addUserPush($titre,$message,$state,$status,$id_user)
       {
         $data = ['titre'    => $titre,
                  'message' => $message,
                  'state'   => $state,
-                 'date_add'=> date('d-m-Y'),
+                 'status'   => $status,
+                 'date_add'=> date('d-m-Y H:i'),
                  'id_user' => $id_user,
                 ];
        
@@ -2610,6 +3245,7 @@ use App\Cinetpay\Cinetpay;
       function getUserPush($id_user)
       {
         $push = DB::table('notifications')->where('id_user','=',$id_user)->get();
+        return $push;
         $nb = count($push);
         if ($nb!=0) {
           return response()->json(['statusCode'=>'200',
@@ -2619,11 +3255,11 @@ use App\Cinetpay\Cinetpay;
                                     'error'=> '',
                                   ]);
         }else{
-          return response()->json(['statusCode'=>401,
+          return response()->json(['statusCode'=>404,
                                    'status'    => false,
                                    'message'   => "Aucune notification push trouvée pour ce client",
                                    'error'     => ''
-                                  ], 401);
+                                  ], 404);
         }
       }
       //Delete all push
@@ -2632,11 +3268,11 @@ use App\Cinetpay\Cinetpay;
          $res =  DB::table('notifications')->where('id_push','=',$id)->delete();
          if ($res==0) 
          {
-           return response()->json(['statusCode'=>401,
+           return response()->json(['statusCode'=>404,
                                     'status'    => false,
                                     'message'   => "Aucune notification push trouvée pour ce compte",
                                     'error'     => ''
-                                ], 401);
+                                ], 404);
          }else {
             return response()->json(['statusCode'=>'200',
                                     'status'=>'true',
@@ -2670,18 +3306,39 @@ use App\Cinetpay\Cinetpay;
          $comd_All = DB::table('commandes')->where('livreur','=',$livreur_id)->orderBy('idcommandes','desc')->get();
          $nb = count($comd_All);
          if ($nb!=0) {
+            $data = [];
+            foreach ($comd_All as $cmd) {
+              $data [] = [
+                  'id'                => $cmd->idcommandes,
+                  'numComd'           => $cmd->numComd,
+                  'clients'           => getClientById($cmd->idclients),
+                  'zone_livraison'    => getZone_id($cmd->zone_idzone)->nom,
+                  'plats'             => getPlatComd($cmd->numComd),
+                  'livreur'           => $cmd->livreur,
+                  'statut_livreur'    => $cmd->statut_livreur,
+                  'statut_client  '   => $cmd->statut_client,
+                  'ambassadeur_code'  => $cmd->ambassadeur_code,
+                  'code_gps  '        => $cmd->code_gps,
+                  'idclients'         => $cmd->idclients,
+                  'qte'               => $cmd->qte,
+                  'montant'           => $cmd->montant,
+                  'code_credit'       => $cmd->code_credit,
+                  'dateComd'          => $cmd->dateComd,
+                  'created_at'        => $cmd->created_at
+              ];
+            }
             return response()->json(['statusCode'=>'200',
                                       'status'=>'true',
                                       'message'=> 'commandes du livreur',
-                                      'data'=> $comd_All,
+                                      'data'=> $data,
                                       'error'=> '',
                                     ]);
          }else{
-            return response()->json(['statusCode'=>401,
+            return response()->json(['statusCode'=>404,
                                      'status' => false,
                                      'message' =>  "Aucune commande trouvée pour ce livreur",
                                      'error' => ''
-                                    ], 401);
+                                    ], 404);
          }
          
        }
@@ -2689,23 +3346,87 @@ use App\Cinetpay\Cinetpay;
        //Get livreur commande by status
        function get_livreur_comd_status($livreur_id,$commande_status)
        {
-          $comd_All = DB::table('commandes')->where('livreur','=',$livreur_id)->where('statut_livreur','=',$commande_status)->get();
+          $comd_All = DB::table('commandes')->where('livreur','=',$livreur_id)->where('statut_livreur','=',$commande_status)->orderBy('idcommandes', 'desc')->get();
           $nb = count($comd_All);
           if ($nb!=0) {
+            $data = [];
+            foreach ($comd_All as $cmd) {
+              $data [] = [
+                  'id'                => $cmd->idcommandes,
+                  'numComd'           => $cmd->numComd,
+                  'clients'           => getClientById($cmd->idclients),
+                  'lieu'              => getZone_id($cmd->zone_idzone)->nom,
+                  'plats'             => getPlatComd($cmd->numComd),
+                  'livreur'           => $cmd->livreur,
+                  'statut_livreur'    => $cmd->statut_livreur,
+                  'statut_client  '   => $cmd->statut_client,
+                  'ambassadeur_code'  => $cmd->ambassadeur_code,
+                  'code_gps  '        => $cmd->code_gps,
+                  'idclients'         => $cmd->idclients,
+                  'qte'               => $cmd->qte,
+                  'montant'           => $cmd->montant,
+                  'code_credit'       => $cmd->code_credit,
+                  'dateComd'          => $cmd->dateComd,
+                  'created_at'        => $cmd->created_at
+              ];
+            }
               return response()->json(['statusCode'=>'200',
                                        'status'=>'true',
                                        'message'=> 'commandes du livreur',
-                                       'data'=> $comd_All,
+                                       'data'=> $data,
                                        'error'=> '',
                                       ]);
           }else{
-           return response()->json(['statusCode'=>401,
+           return response()->json(['statusCode'=>404,
                                     'status' => false,
                                     'message' =>  "Aucune commande trouvée pour ce livreur",
                                     'error' => ''
-                                   ], 401);
+                                   ], 404);
           }
        }
+
+       //Get livreur commande today by status
+       function get_livreur_today_command_status($livreur_id,$today_date,$status)
+       {
+        $comd_All = DB::table('commandes')->where('livreur','=',$livreur_id)->where('dateComd','=',$today_date)->where('statut_livreur','=',$status)->orderBy('idcommandes', 'desc')->get();
+        $nb = count($comd_All);
+        if ($nb!=0) {
+          $data = [];
+          foreach ($comd_All as $cmd) {
+            $data [] = [
+                'id'                => $cmd->idcommandes,
+                'numComd'           => $cmd->numComd,
+                'clients'           => getClientById($cmd->idclients),
+                'lieu'              => getZone_id($cmd->zone_idzone)->nom,
+                'plats'             => getPlatComd($cmd->numComd),
+                'livreur'           => $cmd->livreur,
+                'statut_livreur'    => $cmd->statut_livreur,
+                'statut_client  '   => $cmd->statut_client,
+                'ambassadeur_code'  => $cmd->ambassadeur_code,
+                'code_gps  '        => $cmd->code_gps,
+                'idclients'         => $cmd->idclients,
+                'qte'               => $cmd->qte,
+                'montant_total'     => $cmd->montant,
+                'code_credit'       => $cmd->code_credit,
+                'dateComd'          => $cmd->dateComd,
+                'created_at'        => $cmd->created_at
+            ];
+          }
+            return response()->json(['statusCode'=>'200',
+                                     'status'=>'true',
+                                     'message'=> 'commandes du livreur',
+                                     'data'=> $data,
+                                     'error'=> '',
+                                    ]);
+        }else{
+         return response()->json(['statusCode'=>404,
+                                  'status' => false,
+                                  'message' =>  "Aucune commande trouvée pour ce livreur",
+                                  'error' => ''
+                                 ], 404);
+        }
+       }
+
 
        //Get livreur commande by today
        function get_livreur_today_command($livreur_id,$today_date)
@@ -2713,18 +3434,39 @@ use App\Cinetpay\Cinetpay;
         $comd_All = DB::table('commandes')->where('livreur','=',$livreur_id)->where('dateComd','=',$today_date)->get();
         $nb = count($comd_All);
         if ($nb!=0) {
+          $data = [];
+          foreach ($comd_All as $cmd) {
+            $data [] = [
+                'id'                => $cmd->idcommandes,
+                'numComd'           => $cmd->numComd,
+                'clients'           => getClientById($cmd->idclients),
+                'lieu'              => getZone_id($cmd->zone_idzone)->nom,
+                'plats'             => getPlatComd($cmd->numComd),
+                'livreur'           => $cmd->livreur,
+                'statut_livreur'    => $cmd->statut_livreur,
+                'statut_client  '   => $cmd->statut_client,
+                'ambassadeur_code'  => $cmd->ambassadeur_code,
+                'code_gps  '        => $cmd->code_gps,
+                'idclients'         => $cmd->idclients,
+                'qte'               => $cmd->qte,
+                'montant'           => $cmd->montant,
+                'code_credit'       => $cmd->code_credit,
+                'dateComd'          => $cmd->dateComd,
+                'created_at'        => $cmd->created_at
+            ];
+          }
             return response()->json(['statusCode'=>'200',
                                      'status'=>'true',
                                      'message'=> 'commandes du livreur',
-                                     'data'=> $comd_All,
+                                     'data'=> $data,
                                      'error'=> '',
                                     ]);
         }else{
-         return response()->json(['statusCode'=>401,
+         return response()->json(['statusCode'=>404,
                                   'status' => false,
                                   'message' =>  "Aucune commande trouvée pour ce livreur",
                                   'error' => ''
-                                 ], 401);
+                                 ], 404);
         }
        }
       
@@ -2738,7 +3480,7 @@ use App\Cinetpay\Cinetpay;
         {
             $livreurdata = DB::table('livreurs')->where('idlivreur','=',$livreurid)->first();
             if ($livreurdata=="") {
-              return response()->json(['statusCode'=>'401',
+              return response()->json(['statusCode'=>'404',
                                          'status'=>'false',
                                          'message'=>"Ce livreur n'existe pas",
                                          'data'=> $livreurdata,
@@ -2746,16 +3488,19 @@ use App\Cinetpay\Cinetpay;
                                         ]);
             }
             if($livreurdata->solde > $montant){
-             $solde = $livreurdata->solde-$montant;
-             $data = ['solde'=>$solde];
-             DB::table('livreurs')->where('idlivreur','=',$livreurid)
-                                 ->update($data);
-             #save transaction
-             DB::table('livreur_pay')->insert(['montant'=>$montant,
-                                               'date'=>date('j F Y, H:i'),
-                                               'livreur_idlivreur'=>$livreurid,
-                                               "type"=>"retrait",
-                                              ]);
+               #Calcul de frais
+               $frais = ($montant*2)/100;
+               $total_ttc = $montant+$frais;
+               $solde = $livreurdata->solde-$total_ttc;
+               $data = ['solde'=>$solde];
+               DB::table('livreurs')->where('idlivreur','=',$livreurid)
+                                    ->update($data);
+                #save transaction
+                DB::table('livreur_pay')->insert(['montant'=>$total_ttc,
+                                                  'date'=>date('j F Y, H:i'),
+                                                  'livreur_idlivreur'=>$livreurid,
+                                                  "type"=>"retrait",
+                                                  ]);
 
              #valeur retournée
              return response()->json(['statusCode'=>'200',
@@ -2764,25 +3509,28 @@ use App\Cinetpay\Cinetpay;
                                      'data'=> $livreurdata,
                                      'error'=> '',
                                    ]);
-            }else{
-              return response()->json(['statusCode'=>'401',
-                                        'status'=>false,
-                                        'message'=>"Votre solde est insuffisant",
-                                        'data'=> $livreurdata,
-                                        'error'=> '',
-                                      ]);
             }
-          
+        }
+        //Save livreur payment
+        function LivreurPay($montant,$livreur_id)
+        {
+            #save transaction
+            DB::table('livreur_pay')->insert(['montant'=>$montant,
+                                              'date'=>date('j F Y, H:i'),
+                                              'livreur_idlivreur'=>$livreur_id,
+                                              "type"=>"retrait",
+                                            ]);
         }
        //Get all transaction
        function get_livreur_all_transactions($id_livreur)
        {
-          $livreurdata = DB::table('livreur_pay')->where('livreur_idlivreur','=',$id_livreur)->orderBy('idlivreur_pay','desc')->get();
+          $livreurdata = DB::table('livreur_pay')->where('livreur_idlivreur','=',$id_livreur)->orderBy('idlivreur_pay','desc')->orderBy('idlivreur_pay', 'desc')->get();
+          
           $nb = count($livreurdata);
           if ($nb==0) {
-            return response()->json(['statusCode'=>'401',
+            return response()->json(['statusCode'=>'404',
                                        'status'=>'false',
-                                       'message'=>"Ce livreur n'existe pas",
+                                       'message'=>"Aucune transactions",
                                        'data'=> $livreurdata,
                                        'error'=> "",
                                       ]);
@@ -2794,6 +3542,12 @@ use App\Cinetpay\Cinetpay;
                                      'error'=> '',
                                    ]);
           }
+       }
+
+       //Get livreur solde
+       function getLivreurSolde($livreurid)
+       {
+         $livreurdata = DB::table('livreurs')->where('id_user','=',$livreurid)->first();
        }
      
 
@@ -2812,111 +3566,225 @@ use App\Cinetpay\Cinetpay;
      *  NOTIFICATION SMS
      * -----------------
      */
+        //Format price
+        function formatPrice($price)
+        {
+          return number_format($price, 0,',', '.');
+        }
+
+        //Send SMS V2
+        function sendSMS_V2($msg,$tel,$sender)
+        {
+          $prodUrl = "https://apis.letexto.com/";
+          $token = "2701cf6c9ba227f87af1f0e5ededd3";
+          $from = $sender;
+          $to = $tel;
+          $content = $msg;
+          $dlrUrl = "https://mydomain.com:4444/dlr";
+          $customData = "customData";
+          $sendAt = date('j-m-Y h:i:s');
+
+          $client = new Client();
+          $url = $prodUrl.'V1/messages/send?from=' . urlencode($from) . '&to=' . $to . '&content=' . urlencode($content) . '&token=' . $token . '&dlrUrl=' . urlencode($dlrUrl) . '&dlrMethod=GET&customData=' . $customData . '&sendAt=' . urlencode($sendAt);
+          $request = new Request('GET',$url);
+          $res = $client->sendAsync($request)->wait();
+          return $res->getBody();
+
+
+        }
         //Send SMS
         function Sendsms($msg,$tel,$sender)
         {
-          // Filtrer le messages
-          $nvMsg = str_replace('à','a', $msg);
-          $nvMsg = str_replace('á','a', $nvMsg);
-          $nvMsg = str_replace('â','a', $nvMsg);
-          $nvMsg = str_replace('ç','c', $nvMsg);
-          $nvMsg = str_replace('è','e', $nvMsg);
-          $nvMsg = str_replace('é','e', $nvMsg);
-          $nvMsg = str_replace('ê','e', $nvMsg);
-          $nvMsg = str_replace('ë','e', $nvMsg);
-          $nvMsg = str_replace('ù','u', $nvMsg);
-          $nvMsg = str_replace('ù','u', $nvMsg);
-          $nvMsg = str_replace('ü','u', $nvMsg);
-          $nvMsg = str_replace('û','u', $nvMsg);
-          $nvMsg = str_replace('ô','o', $nvMsg);
-          $nvMsg = str_replace('î','i', $nvMsg);
+          // // Filtrer le messages
+          // $nvMsg = str_replace('à','a', $msg);
+          // $nvMsg = str_replace('á','a', $nvMsg);
+          // $nvMsg = str_replace('â','a', $nvMsg);
+          // $nvMsg = str_replace('ç','c', $nvMsg);
+          // $nvMsg = str_replace('è','e', $nvMsg);
+          // $nvMsg = str_replace('é','e', $nvMsg);
+          // $nvMsg = str_replace('ê','e', $nvMsg);
+          // $nvMsg = str_replace('ë','e', $nvMsg);
+          // $nvMsg = str_replace('ù','u', $nvMsg);
+          // $nvMsg = str_replace('ù','u', $nvMsg);
+          // $nvMsg = str_replace('ü','u', $nvMsg);
+          // $nvMsg = str_replace('û','u', $nvMsg);
+          // $nvMsg = str_replace('ô','o', $nvMsg);
+          // $nvMsg = str_replace('î','i', $nvMsg);
+          // $key = '2701cf6c9ba227f87af1f0e5ededd3';
+          // $api = 'Authorization: Bearer '.$key."";
+          // // Step 1: Créer la campagne
+          // $curl = curl_init();
+          // $datas= [
+          //   'step' => NULL,
+          //   'sender' => $sender,
+          //   'name' => 'SMS',
+          //   'campaignType' => 'SIMPLE',
+          //   'recipientSource' => 'CUSTOM',
+          //   'groupId' => NULL,
+          //   'filename' => NULL,
+          //   'saveAsModel' => false,
+          //   'destination' => 'NAT_INTER',
+          //   'message' => $msg,
+          //   'emailText' => NULL,
+          //   'recipients' =>
+          //   [
+          //     [
+          //       'phone' => $tel,
+          //     ],
+          //   ],
+          //   'sendAt' => [],
+          //   'dlrUrl' => NULL,
+          //   'responseUrl' => NULL,
+          // ];
+          // curl_setopt_array($curl, array(
+          //     CURLOPT_URL => 'https://api.letexto.com/v1/campaigns',
+          //     CURLOPT_RETURNTRANSFER => true,
+          //     CURLOPT_ENCODING => '',
+          //     CURLOPT_MAXREDIRS => 10,
+          //     CURLOPT_TIMEOUT => 0,
+          //     CURLOPT_FOLLOWLOCATION => true,
+          //     CURLOPT_SSL_VERIFYHOST => 0,
+          //     CURLOPT_SSL_VERIFYPEER => 0,
+          //     //curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, 0),
+          //     //curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, 0),
+          //     CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+          //     CURLOPT_CUSTOMREQUEST => 'POST',
+          //     CURLOPT_POSTFIELDS =>json_encode($datas),
+          //     CURLOPT_HTTPHEADER => array(
+          //       $api,
+          //       'Content-Type: application/json'
+          //     ),
+          // ));
+          // $response = curl_exec($curl);
+          // curl_close($curl);
+          // $res = json_decode($response);
+          // $camp_id = $res->id;
+
+          // // Step2: Programmer la campagne
+          // $curl_send = curl_init();
+          // curl_setopt_array($curl_send, array(
+          //   CURLOPT_URL => 'https://api.letexto.com/v1/campaigns/'.$camp_id.'/schedules',
+          //   CURLOPT_RETURNTRANSFER => true,
+          //   CURLOPT_ENCODING => '',
+          //   CURLOPT_MAXREDIRS => 10,
+          //   CURLOPT_TIMEOUT => 0,
+          //   CURLOPT_FOLLOWLOCATION => true,
+          //   CURLOPT_SSL_VERIFYHOST => 0,
+          //   CURLOPT_SSL_VERIFYPEER => 0,
+          //   //curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, 0),
+          //   //curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, 0),
+          //   CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+          //   CURLOPT_CUSTOMREQUEST => 'POST',
+          //   CURLOPT_HTTPHEADER => array(
+          //     $api
+          //   ),
+          // ));
+
+          // //dd($curl_send);
+          // $response_send = curl_exec($curl_send);
+          // //dd($response_send);
+          // curl_close($curl_send);
+          // return $response_send;
+
+          $prodUrl = "https://apis.letexto.com/";
+          $token = "2701cf6c9ba227f87af1f0e5ededd3";
+          $from = $sender;
+          $to = $tel;
+          $content = $msg;
+          $dlrUrl = "https://mydomain.com:4444/dlr";
+          $customData = "customData";
+          $sendAt = date('j-m-Y h:i:s');
+
+          $client = new Client();
+          $url = $prodUrl.'V1/messages/send?from=' . urlencode($from) . '&to=' . $to . '&content=' . urlencode($content) . '&token=' . $token . '&dlrUrl=' . urlencode($dlrUrl) . '&dlrMethod=GET&customData=' . $customData . '&sendAt=' . urlencode($sendAt);
+          $request = new Request('GET',$url);
+          $res = $client->sendAsync($request)->wait();
+          return $res->getBody();  
+
+        }
+        //Volume SMS
+        function SMSVolume()
+        {
           $key = '2701cf6c9ba227f87af1f0e5ededd3';
           $api = 'Authorization: Bearer '.$key."";
-          // Step 1: Créer la campagne
+          //Créer la requête
           $curl = curl_init();
-          $datas= [
-            'step' => NULL,
-            'sender' => $sender,
-            'name' => 'SMS',
-            'campaignType' => 'SIMPLE',
-            'recipientSource' => 'CUSTOM',
-            'groupId' => NULL,
-            'filename' => NULL,
-            'saveAsModel' => false,
-            'destination' => 'NAT_INTER',
-            'message' => $msg,
-            'emailText' => NULL,
-            'recipients' =>
-            [
-              [
-                'phone' => $tel,
-              ],
-            ],
-            'sendAt' => [],
-            'dlrUrl' => NULL,
-            'responseUrl' => NULL,
-          ];
           curl_setopt_array($curl, array(
-              CURLOPT_URL => 'https://api.letexto.com/v1/campaigns',
-              CURLOPT_RETURNTRANSFER => true,
-              CURLOPT_ENCODING => '',
-              CURLOPT_MAXREDIRS => 10,
-              CURLOPT_TIMEOUT => 0,
-              CURLOPT_FOLLOWLOCATION => true,
-              CURLOPT_SSL_VERIFYHOST => 0,
-              CURLOPT_SSL_VERIFYPEER => 0,
-              //curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, 0),
-              //curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, 0),
-              CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-              CURLOPT_CUSTOMREQUEST => 'POST',
-              CURLOPT_POSTFIELDS =>json_encode($datas),
-              CURLOPT_HTTPHEADER => array(
-                $api,
-                'Content-Type: application/json'
-              ),
-          ));
-          $response = curl_exec($curl);
-          curl_close($curl);
-          $res = json_decode($response);
-          $camp_id = $res->id;
-
-          // Step2: Programmer la campagne
-          $curl_send = curl_init();
-          curl_setopt_array($curl_send, array(
-            CURLOPT_URL => 'https://api.letexto.com/v1/campaigns/'.$camp_id.'/schedules',
+            CURLOPT_URL => 'https://api.letexto.com/v1/user-volume',
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_ENCODING => '',
             CURLOPT_MAXREDIRS => 10,
             CURLOPT_TIMEOUT => 0,
             CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_SSL_VERIFYHOST => 0,
-            CURLOPT_SSL_VERIFYPEER => 0,
-            //curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, 0),
-            //curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, 0),
             CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-            CURLOPT_CUSTOMREQUEST => 'POST',
+            CURLOPT_CUSTOMREQUEST => 'GET',
+            //CURLOPT_POSTFIELDS =>json_encode($datas),
             CURLOPT_HTTPHEADER => array(
-              $api
+              $api,
+              'Content-Type: application/json'
             ),
           ));
-
-          //dd($curl_send);
-          $response_send = curl_exec($curl_send);
-          //dd($response_send);
-          curl_close($curl_send);
-          return $response_send;
+          //Execution de la requête
+          $response = curl_exec($curl);
+          curl_close($curl);
+          //dd($api);
+          //Retour json
+          $res = json_decode($response);
+          $text = $res->national;
+          return $text;
         }
 
 
     /**
-     * -------------------
-     *  NOTIFICATION EMAIL
-     * -------------------
+     * -----------------------------
+     *  NOTIFICATION EMAIL && PUSH
+     * -----------------------------
      */
       //Support email
       function support()
       {
-        return "didou@gmail.com";
+        return "contact@lesmarmitesadidou.com";
+      }
+      //send push
+      function sendPush($tokenFCM,$pushTitre,$pushMsg,$pushImg,$status)
+      {
+        $userdata = DB::table('clients')->where('tokenFCM','=',$tokenFCM)->first();
+        if($userdata){
+          $user = $userdata->iduser;
+        }else{
+          $userdata = DB::table('livreurs')->where('tokenFCM','=',$tokenFCM)->first();
+          $user = $userdata->id_user;
+        }
+        addUserPush($pushTitre,$pushMsg,'true',$status,$user);
+        if ($tokenFCM) {
+          // Http::post('https://exp.host/--/api/v2/push/send', [
+          //     'to' =>  $tokenFCM,
+          //     'title' => $pushTitre,
+          //     'body' => $pushMsg,
+          //     'image' => env('APP_URL').$pushImg,
+          //     'sound' => 'default',
+          // ])->throw();
+          
+          Larafirebase::withTitle($pushTitre)
+                        ->withBody($pushMsg)
+                        ->sendMessage($tokenFCM->tokenFCM);
+
+        }
+      }
+      //Send push Larafirebase
+      function sendPushFirebase($tokenFCM,$pushTitre,$pushMsg)
+      {
+        echo "larafirebase";
+      }
+      //Send Email TEXT
+      function SendEmail($to,$titre,$msg)
+      {
+          $from = support();
+          $to = $to;
+          $subject = $titre;
+          $message = $msg;
+          $headers = "From:" . $from;
+          mail($to,$subject,$message, $headers);
       }
 
     /**
@@ -2931,22 +3799,23 @@ use App\Cinetpay\Cinetpay;
             DB::table('code_otp')->where('code','=',$OTP)
                                  ->update(['used'=>1]);
         }
-        //Generate OTP CODE
-        function generateOTP()
+        //Generate OTP CODE WITH TEL
+        function generateOTP($tel)
         {
             do{
               $code = rand(0,99999);
-              $OTP =  "D-".$code;
+              $OTP =  $code;
               $comd = DB::table('code_otp')->where('code','=',$OTP)->first();
             } while ($comd!=null);
-            DB::table('code_otp')->insert(['code'=>$OTP]);
+            DB::table('code_otp')->insert(['code'=>$OTP,'tel'=>$tel]);
             return $OTP;
         }
+        //Generate OTP WITH EMAIL
         
         //Check OTP code
-        function checkOTP($OTP)
+        function checkOTP($OTP,$tel)
         {
-          $OTP = DB::table('code_otp')->where('code','=',$OTP)->where('used','=',0)->first();
+          $OTP = DB::table('code_otp')->where('code','=',$OTP)->where('used','=',0)->where('tel','=',$tel)->first();
           return $OTP;
         }
 
@@ -2995,9 +3864,9 @@ use App\Cinetpay\Cinetpay;
             //version
             $version = "V2";
             //notify url
-            $notify_url = env('APP_URL').'/'.$notify_url;
+            $notify_url = env('APP_URL').'api/'.$notify_url;
             //return url
-            $return_url = env('APP_URL').'/'.$return_url;
+            $return_url = env('APP_URL').'api/'.$return_url;
             //Channel list
             $channels = "ALL";
             //Create Guichet
@@ -3039,17 +3908,38 @@ use App\Cinetpay\Cinetpay;
           }
         }
 
+        //GUICHET CINETPAY DE TRANSFERT D'ARGENT
+        function GuichetPayOut($transfert_id,$phone,$amount,$name,$email,$type,$payment_method,$profil_id)
+        {
+          $CinetPayTransfert = new CinetPayService();
+          $transfert = [
+            'transfer_id'=> $transfert_id,
+            'type'=> $type,
+            'profil_id'=>$profil_id,
+            'prefix'=> '225',
+            'name'=> $name,
+            'phone'=> $phone,
+            'email'=> $email,
+            'amount'=> $amount,
+            "payment_method"=> $payment_method,
+            'notify_url'=> 'notify_transfert',
+            'country_iso'=> 'CI',
+          ];
+          return  $CinetPayTransfert->sendMoney($transfert);
+        }
+
        //Enregistrer le paiement
-       function savePay($transaction_id,$type_paiement,$montant,$description,$client_name,$client_surname,$client_phone,$client_email)
+       function savePay($transaction_id,$type_paiement,$montantpay,$description,$client_name,$client_surname,$client_phone,$client_email,$user_id)
        {
          $data = ['transaction_id' => $transaction_id,
                   'type_paiement'  => $type_paiement,
-                  'montant'        => $montant,
+                  'montantpay'     => $montantpay,
                   'description'    => $description,
                   'client_name'    => $client_name,
                   'client_surname' => $client_surname,
                   'client_phone'   => $client_phone,
-                  'client_email'   => $client_email
+                  'client_email'   => $client_email,
+                  'user_id'        => $user_id,
                   ];
           DB::table('paiement')->insert($data);
        }
