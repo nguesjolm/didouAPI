@@ -992,38 +992,26 @@ class AdminController extends Controller
                     $fin = $request->fin;
                     $pushImg = '';
                     $file = $request->file('img');
-        
-                 
+                    $imgPush = '';
                     $lien  = env('LIEN_FILE');
                     if ($file!='') 
                     {
                         //Traitement d'image
                         $path = $file->store('push','public');
                         $pushImg = $lien.$path;
+                        $pushImg = env('APP_URL').$pushImg;
                     }
                     //Envoie de la campagne
                     $alltokenFCM = ClientToken();
                     foreach ($alltokenFCM as $tokenFCM) {
-                        $token ='';
+                       
                         //return $tokenFCM->tokenFCM;
                         if ( $tokenFCM->tokenFCM) {
-                            // Http::post('https://exp.host/--/api/v2/push/send', [
-                            //     'to' =>  $tokenFCM->tokenFCM,
-                            //     'title' => $pushTitre,
-                            //     'body' => $pushMsg,
-                            //     'image' => env('APP_URL').$pushImg,
-                            //     'sound' => 'default',
-                            // ])->throw();
-                                  
-                            Larafirebase::withTitle($pushTitre)
-                                        ->withBody($pushMsg)
-                                        ->sendMessage($tokenFCM->tokenFCM);
-                            
-                         
+                             sendPush($tokenFCM->tokenFCM,$pushTitre,$pushMsg,$pushImg,'PUSH');
                         }
                     }
                     //Enregistrement de la campange
-                    creatpush($pushMsg,$pushImg,$pushTitre,$debut,$fin);
+                    creatpush($pushMsg,$imgPush,$pushTitre,$debut,$fin);
                     return response()->json(['message' => 'Message envoyé', 'status' => true,'image'=>$request->file('img')]);
                 } catch (\Throwable $th) {
                     //throw $th;
@@ -1064,6 +1052,25 @@ class AdminController extends Controller
                     'message' => $th->getMessage()
                 ], 500);
              }
+           }
+           //Delivery days
+           function getdeliverydays(Request $request)
+           {
+             $days =  getdeliverydays();
+             if (count($days)!=0) {
+                return response()->json(['statusCode'=>200,
+                                            'status'=>true,
+                                            'message'=>'horaire de livraison',
+                                            'data'=> $days,
+                                        ],200);
+             }else{
+                return response()->json(['statusCode'=>404,
+                                         'status'=>true,
+                                         'message'=>'horaire de livraison',
+                                         'data'=> [],
+                                        ],404);
+             }
+              
            }
 
 

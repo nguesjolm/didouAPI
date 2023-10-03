@@ -1948,6 +1948,9 @@ use App\Cinetpay\CinetPayService;
               function giveOrderToLivreur($idcommandes,$idlivreur)
               {
                 $livreur = getLivreurById($idlivreur);
+                if ($livreur->tokenFCM) {
+                  sendPush($livreur->tokenFCM,'Livraison','une livraison vous a été affectée','','LIVREUR_ACTION');
+                }
                 // sendPush($livreur->tokenFCM,'Livraison','une livraison vous a été affectée','','LIVREUR_ACTION');
                 SendEmail($livreur->email,'Afffectation de commande','une livraison vous a été affectée');
                 DB::table('commandes')->where('idcommandes','=',$idcommandes)
@@ -3755,21 +3758,67 @@ use App\Cinetpay\CinetPayService;
           $userdata = DB::table('livreurs')->where('tokenFCM','=',$tokenFCM)->first();
           $user = $userdata->id_user;
         }
-        addUserPush($pushTitre,$pushMsg,'true',$status,$user);
         if ($tokenFCM) {
-          // Http::post('https://exp.host/--/api/v2/push/send', [
-          //     'to' =>  $tokenFCM,
-          //     'title' => $pushTitre,
-          //     'body' => $pushMsg,
-          //     'image' => env('APP_URL').$pushImg,
-          //     'sound' => 'default',
-          // ])->throw();
-          
-          Larafirebase::withTitle($pushTitre)
-                        ->withBody($pushMsg)
-                        ->sendMessage($tokenFCM->tokenFCM);
+          addUserPush($pushTitre,$pushMsg,'true',$status,$user);
+          $SERVER_API_KEY = env('FIREBASE_SERVER_KEY');
+          $registrationIds = [$tokenFCM];
+          if ($pushImg) {
+            $data = [
+              "registration_ids" => $registrationIds,
+              "notification" => [
+                  "title" => $pushTitre,
+                  "body" => $pushMsg,  
+              ],
+              'data' => [
+                'image' => $pushImg, // URL of the image you want to send
+                ],
+            ];
+          }else{
+            $data = [
+              "registration_ids" => $registrationIds,
+              "notification" => [
+                  "title" => $pushTitre,
+                  "body" => $pushMsg,  
+              ]
+            ];
+          }
+         
+          $dataString = json_encode($data);
+          // return $dataString;
+          $headers = [
+            'Authorization: key=' . $SERVER_API_KEY,
+            'Content-Type: application/json',
+          ];
+          $ch = curl_init();
+        
+          curl_setopt($ch, CURLOPT_URL, 'https://fcm.googleapis.com/fcm/send');
+          curl_setopt($ch, CURLOPT_POST, true);
+          curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+          curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+          curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+          curl_setopt($ch, CURLOPT_POSTFIELDS, $dataString);
+          #Check a type push :: FcmPush or ExpoPush
+          if (strpos('ExponentPushToken', $tokenFCM) !== false) {
+            Http::post('https://exp.host/--/api/v2/push/send', [
+              'to' =>  $tokenFCM,
+              'title' => $pushTitre,
+              'body' => $pushMsg,
+              'image' => env('APP_URL').$pushImg,
+              'sound' => 'default',
+            ])->throw();
+          } else {
+            $response = curl_exec($ch);
+            return $response;
+          }
 
+          
         }
+      }
+      //Get delivery days
+      function getdeliverydays()
+      {
+        $days =  DB::table('deliverydays')->get();
+        return $days;
       }
       //Send push Larafirebase
       function sendPushFirebase($tokenFCM,$pushTitre,$pushMsg)

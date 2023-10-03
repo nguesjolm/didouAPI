@@ -259,7 +259,10 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
   Route::GET('searchPush',[AdminController::class, 'searchPush'])->middleware('auth:sanctum');
   //Supprimer une campagne push
   Route::DELETE('deletepush',[AdminController::class, 'deletepush'])->middleware('auth:sanctum');
+  //Delivery days
+  Route::GET('getdeliverydays',[AdminController::class, 'getdeliverydays']);
 
+  
   
  
   /* --------------------------

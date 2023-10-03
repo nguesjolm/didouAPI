@@ -608,10 +608,14 @@ class ClientController extends Controller
                     {
                         creditersoldAmbasad($client->ambassadeur);
                         #Push à l'ambassadeur
-                        sendPush($client->tokenFCM,'Ambassadeur','cher ambassadeur votre solde a été crédité','','AMBASSADOR_ACTION');
+                        if ($client->tokenFCM) {
+                            sendPush($client->tokenFCM,'Ambassadeur','cher ambassadeur votre solde a été crédité','','AMBASSADOR_ACTION');
+                        }
                     }
                     //push de conmmande validée au client
-                    sendPush($client->tokenFCM,'Commande','votre commande a été validée, la livraison est en cours','','DELIVERING');
+                    if ($client->tokenFCM) {
+                        sendPush($client->tokenFCM,'Commande','votre commande a été validée, la livraison est en cours','','DELIVERING');
+                    }
                     //Retour
                      return response()->json(['statusCode'=>'200',
                                          'status'=>'true',
@@ -963,7 +967,9 @@ class ClientController extends Controller
                         
                         saveCommand($commande->clientid,$commande->ambassadeur_code,$commande->credit_didou,$commande->montant,$commande->montantpay,$commande->qte,$commande->zoneid,$commande->dateComd,$commande->statutClient,$commande->numcomd,$commande->longitude,$commande->largitude,$commande->zoneprecise);
                         # Push au client
-                        // sendPush($client->tokenFCM,'Commande','Paiement effectué votre commande a été validée vous serez livrer dans quelques mineutes','','DELIVERING');
+                        if ($client->tokenFCM) {
+                            sendPush($client->tokenFCM,'Commande','Paiement effectué votre commande a été validée vous serez livrer dans quelques mineutes','','DELIVERING');
+                        }
                         # Email à l'administrateur
                         $etting = getSettingIn();
                         $msgG = "Infos Commande :
@@ -984,7 +990,9 @@ class ClientController extends Controller
                             creditersoldAmbasad($commande->ambassadeur_code);
                             #Push à l'ambassadeur
                             $ambassadeur = getAmb($commande->ambassadeur_code);
-                            sendPush($ambassadeur->tokenFCM,'Ambassadeur','cher ambassadeur votre solde a été crédité','','AMBASSADOR_ACTION');
+                            if ($ambassadeur->tokenFCM) {
+                                sendPush($ambassadeur->tokenFCM,'Ambassadeur','cher ambassadeur votre solde a été crédité','','AMBASSADOR_ACTION');
+                            }
                         }
                     }
                     if ($payment->type_paiement=='credit') {
@@ -993,7 +1001,9 @@ class ClientController extends Controller
                         # Mise à jour du status remboursement en succès
                         rembourserCreditUser($credit);
                         #Push au client
-                        sendPush($client->tokenFCM,'Crédit Didou','remboursement du crédit effectué avec succès','','CREDIT_DIDOU');
+                        if ($client->tokenFCM) {
+                            sendPush($client->tokenFCM,'Crédit Didou','remboursement du crédit effectué avec succès','','CREDIT_DIDOU');
+                        }
                     }
                     
                 }
@@ -1010,7 +1020,9 @@ class ClientController extends Controller
                     //  return $commande;
                      saveCommand($commande->clientid,$commande->ambassadeur_code,$commande->credit_didou,$commande->montant,$commande->montantpay,$commande->qte,$commande->zoneid,$commande->dateComd,$commande->statutClient,$commande->numcomd,$commande->longitude,$commande->largitude,$commande->zoneprecise);
                      # Push au client
-                     sendPush($client->tokenFCM,'Commande','Paiement effectué votre commande a été validée vous serez livrer dans quelques mineutes','','DELIVERING');
+                     if ($client->tokenFCM) {
+                        sendPush($client->tokenFCM,'Commande','Paiement effectué votre commande a été validée vous serez livrer dans quelques mineutes','','DELIVERING');
+                     }
                      # Email à l'administrateur
                      $etting = getSettingIn();
                      $msgG = "Infos Commande :
@@ -1039,7 +1051,9 @@ class ClientController extends Controller
                      # Mise à jour du status remboursement en succès
                      rembourserCreditUser($credit);
                      #Push au client
-                     sendPush($client->tokenFCM,'Crédit Didou','remboursement du crédit effectué avec succès','','CREDIT_DIDOU');
+                     if ($client->tokenFCM) {
+                        sendPush($client->tokenFCM,'Crédit Didou','remboursement du crédit effectué avec succès','','CREDIT_DIDOU');
+                     }
                  }
               }
             }
