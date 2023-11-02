@@ -133,7 +133,10 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
   //Get recette by recommande
   Route::GET('getRecetteRecomd/{state}',[AdminController::class, 'getRecetteRecomd'])->middleware('auth:sanctum');
   //Supprimer la galerie d'une recette
-  Route::DELETE('deletegalerie',[AdminController::class, 'deletegalerie'])->middleware('auth:sanctum');
+  Route::DELETE('deletegalerie/{id_galerie}',[AdminController::class, 'deletegalerie'])->middleware('auth:sanctum');
+  //update galerie d'une recette
+  Route::POST('updategalerie',[AdminController::class, 'updategalerie'])->middleware('auth:sanctum');
+
   
 
 
@@ -258,7 +261,7 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
   //Rechercher une push
   Route::GET('searchPush',[AdminController::class, 'searchPush'])->middleware('auth:sanctum');
   //Supprimer une campagne push
-  Route::DELETE('deletepush',[AdminController::class, 'deletepush'])->middleware('auth:sanctum');
+  Route::DELETE('deletepush/{id_push}',[AdminController::class, 'deletepush'])->middleware('auth:sanctum');
   //Delivery days
   Route::GET('getdeliverydays',[AdminController::class, 'getdeliverydays']);
 

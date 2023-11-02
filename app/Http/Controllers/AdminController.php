@@ -340,6 +340,19 @@ class AdminController extends Controller
         /*----------------
          GESTION RECETTES
         ----------------*/
+            //Update galerie
+            function updategalerie(Request $request)
+            {
+                $photo_g = $request->file('galerie');
+                $path = $photo_g->store('galerie','public');
+                $lien  = env('LIEN_FILE');
+                $photo_f = $lien.$path;
+                updateGalerie($request->id_galerie,$photo_f);
+                return response()->json(['statusCode'=>200,
+                                        'status'=>true,
+                                        'message'=>"Mise à jour effectu avec succès",
+                                     ]);
+            }
             //Suppression de catégorie
             function deletegalerie(Request $request)
             {
@@ -515,8 +528,11 @@ class AdminController extends Controller
                     $imageFile = $lien.$path;
                 }
                 $res = updateRecette($nomrecette,$description,$categorie,$recommanded,$disponible,$stock,$prix,$imageFile,$recetteid);
-             
+                
                 //Get recette galerie data
+                $galerie = $request->file('galerie');
+               
+                // return $nb;
                 if ($request->file('galerie')) {
                     foreach ($request->file('galerie') as $key => $file)
                     {
@@ -579,6 +595,7 @@ class AdminController extends Controller
                     ], 500);
                 }
             }
+            //update 
 
         /*----------------
           GESTION CLIENTS
@@ -992,27 +1009,30 @@ class AdminController extends Controller
                     $fin = $request->fin;
                     $pushImg = '';
                     $file = $request->file('img');
-                    $imgPush = '';
                     $lien  = env('LIEN_FILE');
                     if ($file!='') 
                     {
                         //Traitement d'image
                         $path = $file->store('push','public');
                         $pushImg = $lien.$path;
-                        $pushImg = env('APP_URL').$pushImg;
+                        // $imgPush = env('APP_URL').$pushImg;
+                        $imgPush = $pushImg;
+                    }else{
+                        $imgPush = '';
                     }
+                    //Enregistrement de la campange
+                    creatpush($pushMsg,$imgPush,$pushTitre,$debut,$fin);
                     //Envoie de la campagne
                     $alltokenFCM = ClientToken();
                     foreach ($alltokenFCM as $tokenFCM) {
                        
                         //return $tokenFCM->tokenFCM;
                         if ( $tokenFCM->tokenFCM) {
-                             sendPush($tokenFCM->tokenFCM,$pushTitre,$pushMsg,$pushImg,'PUSH');
+                            $respush =  sendPush($tokenFCM->tokenFCM,$pushTitre,$pushMsg,$pushImg,'PUSH');
                         }
                     }
-                    //Enregistrement de la campange
-                    creatpush($pushMsg,$imgPush,$pushTitre,$debut,$fin);
-                    return response()->json(['message' => 'Message envoyé', 'status' => true,'image'=>$request->file('img')]);
+                 
+                    return response()->json(['message' => 'Message envoyé', 'status' => true,'image'=>$imgPush,'respush'=>$respush]);
                 } catch (\Throwable $th) {
                     //throw $th;
                     return response()->json([
@@ -1039,6 +1059,7 @@ class AdminController extends Controller
              
              try {
                 $push_id = $request->id_push;
+               
                 deletePush($push_id);
                 return response()->json(['statusCode'=>200,
                                          'status' => true,

@@ -61,7 +61,7 @@ class LivreurController extends Controller
         try {
             $user = Auth::user();
             $livreur = getLivreurID($user->id);
-            return  get_livreur_today_command_status($livreur->idlivreur,date('d/m/Y'),$request->status);
+            return  get_livreur_today_command_status($livreur->idlivreur,date('d-m-Y'),$request->status);
          } catch (\Throwable $th) {
             //throw $th;
             return response()->json([
@@ -159,9 +159,10 @@ class LivreurController extends Controller
                 'password' => $password
             ]);
 
-            Livreur::create(['status'  => "true",
-                             'local'   => $request->zone_id,
-                             'id_user' => $user->id,
+            Livreur::create(['status'   => "true",
+                             'local'    => $request->zone_id,
+                             'tokenFCM' => $request->tokenFCM,
+                             'id_user'  => $user->id,
                             ]);
             
             return response()->json([
@@ -211,19 +212,30 @@ class LivreurController extends Controller
             $user = User::where('tel', $request->tel)->first();
             $livreur = getLivreurInfo($user->id);
             #Generer FCM Token
-            if ($request->tokenFCM)
+           
+            if($livreur)
             {
-                #Mise à jour du token
-                updateTokenFCM($livreur->idlivreur,$request->tokenFCM);
+                if ($request->tokenFCM)
+                {
+                    #Mise à jour du token
+                    updateTokenFCM($livreur->idlivreur,$request->tokenFCM);
+                }
+                return response()->json([
+                    'statusCode'=>200,
+                    'status'  => true,
+                    'message' => "connecté avec succès",
+                    'data'    => $user,
+                    'livreur' => $livreur,
+                    'token'   => $user->createToken("API TOKEN")->plainTextToken,
+                   ], 200);
+            }else{
+                return response()->json([
+                    'statusCode'=>404,
+                    'status'  => false,
+                    'message' => "code erroné, Accès reservé au livreur",
+                   ], 404);
             }
-            return response()->json([
-                                     'statusCode'=>200,
-                                     'status'  => true,
-                                     'message' => "connecté avec succès",
-                                     'data'    => $user,
-                                     'livreur' => $livreur,
-                                     'token'   => $user->createToken("API TOKEN")->plainTextToken,
-                                    ], 200);
+           
 
         } catch (\Throwable $th) {
             //throw $th;

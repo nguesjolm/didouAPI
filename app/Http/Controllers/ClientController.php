@@ -228,7 +228,7 @@ class ClientController extends Controller
                     Sendsms($msg,"225".$tel,"DIDOU");
                     return response()->json(['statusCode' => 200,
                                              'status'     => true,
-                                             'message'    => $msg
+                                             'message'    => "un code de validation a été envoyé sur votre numéro de téléphone"
                                             ], 200); 
                 }else {
                     return response()->json([
