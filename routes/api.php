@@ -355,7 +355,10 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
         Route::POST('newpassword',[ClientController::class, 'newpassword'])->middleware('auth:sanctum');
         //update tokenFCM
         Route::PUT('updateTokenFCM',[ClientController::class, 'updateTokenFCM']);
+        //change pass livreur
+        Route::POST('changeUserPass',[ClientController::class, 'changeUserPass']);
 
+        
 
     /**
      * -----------

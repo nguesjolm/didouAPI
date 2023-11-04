@@ -61,7 +61,7 @@ class LivreurController extends Controller
         try {
             $user = Auth::user();
             $livreur = getLivreurID($user->id);
-            return  get_livreur_today_command_status($livreur->idlivreur,date('d-m-Y'),$request->status);
+            return  get_livreur_today_command_status($livreur->idlivreur,date('d/m/Y'),$request->status);
          } catch (\Throwable $th) {
             //throw $th;
             return response()->json([

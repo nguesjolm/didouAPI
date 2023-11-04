@@ -674,7 +674,7 @@ class AdminController extends Controller
                $tel = $request->tel;
                $email = $request->email;
                $local = $request->local;
-               $password = rand (5, 15)."LD";
+               $password = rand (1000, 1505)."LD";
                return createLivreur($nom,$tel,$email,$local,$password);
             }
             //Get all livreurs

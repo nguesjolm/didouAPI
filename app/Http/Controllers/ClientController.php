@@ -346,6 +346,30 @@ class ClientController extends Controller
             }
         }
 
+        //Change password
+        function changeUserPass(Request $request)
+        {
+            $tel = $request->tel;
+            $pass = Hash::make($request->password);
+            $res = User::firstWhere('tel',$tel);
+            if ($res) {
+                # code...
+                User::where('tel', $tel)
+                    ->update(['password' => $pass]);
+                return response()->json([
+                    'statusCode'=>200,
+                    'status' => true,
+                    'message' => "Mot de passe modifier avec succès"
+                ], 200);
+            }else{
+                return response()->json([
+                    'statusCode'=>404,
+                    'status' => false,
+                    'message' => "Numéro de téléphone incorrecte"
+                ], 404);
+            }
+        }
+
 
 
     /**
@@ -641,7 +665,7 @@ class ClientController extends Controller
                  # Etape 2 : Enregistrer la transaction et le paiement
                  $type_paiement = "commande";
                  $numComd = NumComd();
-                 $dateComd = date("d-m-Y H:i:s");
+                 $dateComd = date("d/m/Y");
                  #Save transaction :: save commande
                  saveTransaction($client->idclient,$numComd,$longitude,$largitude,$montantPay,$client->ambassadeur,$credit_didou,$montant,$qte,$zoneid,$dateComd,$statutClient,$transaction_id,$zoneprecise);
                  #Save commande details ::  Enregistrer chaque produit de la commande
