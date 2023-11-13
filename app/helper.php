@@ -236,7 +236,7 @@ use App\Cinetpay\CinetPayService;
                   return response()->json(['statusCode'=>'404',
                                           'status'=>'false',
                                           'message'=>'Aucun commentaire trouvé',
-                                          'data'=> '',
+                                          'data'=> [],
                                           'error'=> '',
                                         ]);
                 }
@@ -964,9 +964,13 @@ use App\Cinetpay\CinetPayService;
             {
               if ($image!='') 
               {
-                DB::table('plats_galeries')->where('recettes','=',$recetteid)
-                                           ->update(['images'=>$image]);
+                DB::table('plats_galeries')->insert(['recettes'=>$recetteid,'images'=>$image]);
               }
+            }
+            //Vider la galerie en fonction de la recette
+            function DelGalerieRecette($recetteid)
+            {
+              DB::table('plats_galeries')->where('recettes','=',$recetteid)->delete();
             }
 
             //Update recette supplement
@@ -2083,7 +2087,7 @@ use App\Cinetpay\CinetPayService;
                     return response()->json(['statusCode'=>'404',
                                               'status'=>'false',
                                               'message'=>'Aucun crédit trouvé',
-                                              'data'=> '',
+                                              'data'=> [],
                                               'error'=> '',
                                             ]);
                   }

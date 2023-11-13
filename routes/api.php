@@ -57,7 +57,7 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     ------------------
   */
   //Create avis clients
-  Route::POST('createAvis',[ClientController::class, 'createAvis'])->middleware('auth:sanctum');
+  Route::POST('createAvis',[ClientController::class, 'createAvis']);
   //Get avis by Mentions
   Route::POST('getAvisByMentions',[AdminController::class, 'getAvisByMentions'])->middleware('auth:sanctum');
   //Get commentaire by mentions

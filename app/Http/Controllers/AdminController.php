@@ -351,7 +351,7 @@ class AdminController extends Controller
                 return response()->json(['statusCode'=>200,
                                         'status'=>true,
                                         'message'=>"Mise à jour effectu avec succès",
-                                     ]);
+                                     ],200);
             }
             //Suppression de catégorie
             function deletegalerie(Request $request)
@@ -363,15 +363,15 @@ class AdminController extends Controller
                  return response()->json(['statusCode'=>200,
                                           'status' => true,
                                           'message' => "Suppression de galerie effectué avec succès"
-                                        ], 500);
+                                        ], 200);
 
                } catch (\Throwable $th) {
                 //throw $th;
                 return response()->json([
-                    'statusCode'=>500,
+                    'statusCode'=>404,
                     'status' => false,
                     'message' => $th->getMessage()
-                ], 500);
+                ], 404);
                }
               
             }
@@ -530,19 +530,21 @@ class AdminController extends Controller
                 $res = updateRecette($nomrecette,$description,$categorie,$recommanded,$disponible,$stock,$prix,$imageFile,$recetteid);
                 
                 //Get recette galerie data
-                $galerie = $request->file('galerie');
+                // $galerie = $request->file('galerie');
+                
+                // if ($request->file('galerie')) {
+
+                //     //Vider la galerie
+                //     DelGalerieRecette($recetteid);
+                //     foreach ($request->file('galerie') as $key => $file)
+                //     {
+                //          $path = $file->store('galeries','public');
+                //          $fileGalerie = $lien.$path;
+                //          updateRecetteGalerie($recetteid,$fileGalerie);
+                //     }
+                // }
                
-                // return $nb;
-                if ($request->file('galerie')) {
-                    foreach ($request->file('galerie') as $key => $file)
-                    {
-                         $path = $file->store('galeries','public');
-                         $fileGalerie = $lien.$path;
-                        //  dd($fileGalerie);
-                         updateRecetteGalerie($recetteid,$fileGalerie);
-                    }
-                }
-               
+              
                 //Get recette supplement data
                 if ($request->supplement) {
                     deleteRecetteID($recetteid);
@@ -556,12 +558,12 @@ class AdminController extends Controller
                     }
                 }
               
-                return response()->json(['statusCode'=>'200',
+                return response()->json(['statusCode'=>200,
                                         'status'=>'true',
                                         'message'=>"Mise à jour effectuée avec succès",
                                         'data'=> '',
                                         'error'=> '',
-                                    ]);
+                                    ],200);
                
               
             }
