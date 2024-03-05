@@ -370,6 +370,15 @@ class ClientController extends Controller
             }
         }
 
+        //delete count client
+        function deletecountclient(Request $request)
+        {
+            return response()->json([
+                'statusCode'=>200,
+                'status' => true,
+                'message' =>"votre compte est supprimé avec succès"
+            ], 500);
+        }
 
 
     /**

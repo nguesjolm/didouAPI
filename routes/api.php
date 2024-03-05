@@ -357,6 +357,9 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
         Route::PUT('updateTokenFCM',[ClientController::class, 'updateTokenFCM']);
         //change pass livreur
         Route::POST('changeUserPass',[ClientController::class, 'changeUserPass']);
+        //delete count
+        Route::GET('deletecountclient/{id_user}',[ClientController::class, 'deletecountclient']);
+
 
         
 
